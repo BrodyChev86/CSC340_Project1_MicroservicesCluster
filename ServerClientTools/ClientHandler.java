@@ -18,7 +18,7 @@ public class ClientHandler implements Runnable {
     private BufferedReader bufferedReader; //Used to read incoming messages from the client
     private BufferedWriter bufferedWriter; //Used to send messages back to the client
     private String clientUsername;
-    private final String serviceOptions = "Please indicate which service you would like to use: \n1. Base64 Encode/Decode";
+    private final String serviceOptions = "Please indicate which service you would like to use: \n1. Base64 Encode/Decode \nType 'list' to see these options again or 'exit' to leave the chat"; 
 
     public ClientHandler(Socket socket){
         try {
@@ -45,6 +45,10 @@ public class ClientHandler implements Runnable {
                 if (messageFromClient.contains(":")) {
                     messageFromClient = messageFromClient.substring(messageFromClient.indexOf(":") + 1).trim();
                 }
+                if(messageFromClient.equals("exit")){
+                    removeClientHandler(); 
+                    break; //If the client disconects the loop will break and the thread will end 
+                }
                 if(messageFromClient.equals("1")){ //Checks if the client wants to use the Base64 Encode/Decode service
                     broadcastMessageToSender("You have selected the Base64 Encode/Decode service! Please enter the text you would like to encode or decode in the following format: \nTo Encode: encode <text> \nTo Decode: decode <text>"); //Sends a message to the client with instructions on how to use the Base64 Encode/Decode service
                 }else if(messageFromClient.equals("list")){
@@ -65,7 +69,6 @@ public class ClientHandler implements Runnable {
                break; //If the client disconects the loop will break and the thread will end 
             }
         }
-        throw new UnsupportedOperationException("Unimplemented method 'run'");
     }
 
     //Sends a message to all clients except the sender, allowing for communication between clients while preventing the sender from receiving their own message back
@@ -100,7 +103,8 @@ public class ClientHandler implements Runnable {
     
     public void removeClientHandler(){
         clientHandlers.remove(this); //Removes the current client handler instance from the static list of client handlers, allowing the server to stop tracking and communicating with the client that has disconnected
-        broadcastMessage("SERVER: " + clientUsername + " has left the chat!"); //Sends a message to all connected clients notifying them that a client has left 
+        broadcastMessage("SERVER: " + clientUsername + " has left"); //Sends a message to all connected clients notifying them that a client has left 
+        System.out.println("A client has disconnected!"); //Prints a message to the server console indicating that a client has disconnected
     }
 
     public void closeEverything(Socket socket, BufferedReader bufferedReader, BufferedWriter bufferedWriter){

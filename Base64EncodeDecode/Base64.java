@@ -1,4 +1,4 @@
-package CSC340_Project1_MicroservicesCluster.Base64EncodeDecode;
+package Base64EncodeDecode;
 
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;

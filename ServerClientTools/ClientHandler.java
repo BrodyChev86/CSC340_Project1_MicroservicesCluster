@@ -18,7 +18,7 @@ public class ClientHandler implements Runnable {
     private BufferedReader bufferedReader; //Used to read incoming messages from the client
     private BufferedWriter bufferedWriter; //Used to send messages back to the client
     private String clientUsername;
-    private final String serviceOptions = "Please indicate which service you would like to use: \n1. Base64 Encode/Decode";
+    private final String serviceOptions = "Please indicate which service you would like to use: \n1. Base64 Encode/Decode\n2. Calculate File Entropy";
 
     public ClientHandler(Socket socket){
         try {
@@ -47,7 +47,10 @@ public class ClientHandler implements Runnable {
                 }
                 if(messageFromClient.equals("1")){ //Checks if the client wants to use the Base64 Encode/Decode service
                     broadcastMessageToSender("You have selected the Base64 Encode/Decode service! Please enter the text you would like to encode or decode in the following format: \nTo Encode: encode <text> \nTo Decode: decode <text>"); //Sends a message to the client with instructions on how to use the Base64 Encode/Decode service
-                }else if(messageFromClient.equals("list")){
+                }else if(messageFromClient.equals("2")){
+                    broadcastMessageToSender("You have selected the File Entopy Analyzer service! Please enter the file you would like to encode or decode in the following format: \nentropy file path"); //Sends a message to the client with instructions on how to use the File Entropy Analyzer service
+                }
+                else if(messageFromClient.equals("list")){
                     broadcastMessageToSender(serviceOptions);
                 } else if (messageFromClient.startsWith("encode ")){ //Checks if the client wants to encode a message
                     String textToEncode = messageFromClient.substring(7); //Extracts the text to encode from the client's message by removing the "encode " prefix, allowing the server to process only the relevant text for encoding
@@ -57,7 +60,10 @@ public class ClientHandler implements Runnable {
                     String textToDecode = messageFromClient.substring(7); //Extracts the text to decode from the client's message by removing the "decode " prefix, allowing the server to process only the relevant text for decoding
                     String decodedText = Base64.decode(textToDecode); //Decodes the extracted text using Base64 decoding, converting it back into its original format for clients that understand Base64
                     broadcastMessageToSender("Decoded Text: " + decodedText); //Sends the decoded text back to the client that requested it, allowing them to see the result of their decoding request
-                } else {
+                } else if(messageFromClient.startsWith("entropy")) {
+                    Double entropy = FileEntropyAnalyzer.EntropyAnalyzer.calculateEntropy(messageFromClient.substring(8));
+                    broadcastMessageToSender("File Entropy: " + entropy);;
+                }else {
                     broadcastMessageToSender("Invalid input. Please enter a valid option or follow the instructions for encoding/decoding."); //Sends an error message back to the client if their input does not match any valid commands, guiding them towards correct usage of the services
                 }
             } catch (Exception e) {

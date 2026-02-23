@@ -1,5 +1,6 @@
 package FileEntropyAnalyzer;
-
+//Used code from https://www.cs.usfca.edu/~mmalensek/cs677/schedule/materials/Entropy.java.html as a reference to create the EntropyAnalyzer
+//Also used Stack Overflow to help understand how to calculate file entropy
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;

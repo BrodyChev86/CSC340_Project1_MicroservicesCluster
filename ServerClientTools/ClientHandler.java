@@ -1,10 +1,8 @@
 package ServerClientTools;
 //Code created with the help of a tutorial on YouTube by WittCode (https://youtu.be/gLfuZrrfKes?si=r0TVgY7UQkRsKLtl) and modified by BrodyChev86 to fit the requirements of the project
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
 import java.net.Socket;
 import java.util.ArrayList;
 
@@ -14,23 +12,26 @@ import Base64EncodeDecode.Base64;
 public class ClientHandler implements Runnable {
 
     public static ArrayList<ClientHandler> clientHandlers = new ArrayList<>(); //A static list that holds references to all active client handlers, allowing the server to manage and communicate with multiple clients simultaneously
+    static ArrayList<FileHandler> fileHandlers = new ArrayList<>(); //A static list that holds FileHandler objects representing files available for entropy analysis, allowing the server to manage and access these files when clients request the File Entropy Analyzer service.
     private Socket socket; //Used to establish a connection between the server and a specific client
-    private BufferedReader bufferedReader; //Used to read incoming messages from the client
-    private BufferedWriter bufferedWriter; //Used to send messages back to the client
+    private DataInputStream dataInputStream; //Used to read binary data from the client, such as files for entropy analysis
     private String clientUsername;
-    private final String serviceOptions = "Please indicate which service you would like to use: \n1. Base64 Encode/Decode\n2. Calculate File Entropy";
+    private final String serviceOptions = "Please indicate which service you would like to use: \n1. Calculate File Entropy\n2. Base64 Encode/Decode\nType 'list' to see these options again at any time!"; //A string that contains the options for the services offered by the server, which is sent to clients to guide them in choosing a service
+    private DataOutputStream dataOutputStream;
+    private int fileId = 0; //A counter used to assign unique IDs to uploaded files, allowing the server to manage and reference these files
+    private FileHandler currentFile = null;
 
     public ClientHandler(Socket socket){
         try {
             this.socket = socket;
-            this.bufferedWriter = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
-            this.bufferedReader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            this.clientUsername = bufferedReader.readLine(); //Reads the client's username from the input stream, allowing the server to identify and manage the client based on their username
+            this.dataInputStream = new DataInputStream(socket.getInputStream()); //Initializes the data input stream for reading binary data from the client
+            this.dataOutputStream = new DataOutputStream(socket.getOutputStream()); //Initializes the data output stream for sending binary data back to the client
+            this.clientUsername = dataInputStream.readUTF(); //Reads the client's username from the input stream, allowing the server to identify and manage the client based on their username
             clientHandlers.add(this); //Adds the current client handler instance to the static list of client handlers, enabling the server to keep track of all connected clients and facilitate communication between them
             broadcastMessage("SERVER: " + clientUsername + " has connected"); //Sends a message to all connected clients notifying them that a new client has joined 
             broadcastMessageToSender(serviceOptions); //Sends a message to the client that just connected asking them to choose a service
         } catch (IOException e) {
-            closeEverything(socket, bufferedReader, bufferedWriter); 
+            closeEverything(socket, dataInputStream, dataOutputStream); 
         }
     }
 
@@ -41,39 +42,96 @@ public class ClientHandler implements Runnable {
         String messageFromClient;
         while(socket.isConnected()){
             try {
-                messageFromClient = bufferedReader.readLine().trim(); //Waits for a message from a client, needs to be done on a seperate thread to avoid blocking the main server thread and allowing the server to handle multiple clients concurrently
+                messageFromClient = dataInputStream.readUTF().trim(); //Waits for a message from a client, needs to be done on a seperate thread to avoid blocking the main server thread and allowing the server to handle multiple clients concurrently
                 if (messageFromClient.contains(":")) {
                     messageFromClient = messageFromClient.substring(messageFromClient.indexOf(":") + 1).trim();
                 }
-                if(messageFromClient.equals("exit")){
+
+                if(messageFromClient.equals("upload")){
+                    broadcastMessageToSender("FILE_UPLOAD");
+                    fileUpload(); //If the client sends a message indicating that they want to upload a file, call the fileUpload method to handle the file upload process
+                }else if(messageFromClient.equals("exit")){
                     removeClientHandler(); 
                     break; //If the client disconects the loop will break and the thread will end 
-                }
-                if(messageFromClient.equals("1")){ //Checks if the client wants to use the Base64 Encode/Decode service
-                    broadcastMessageToSender("You have selected the Base64 Encode/Decode service! Please enter the text you would like to encode or decode in the following format: \nTo Encode: encode <text> \nTo Decode: decode <text>"); //Sends a message to the client with instructions on how to use the Base64 Encode/Decode service
+                }else if(messageFromClient.equals("1")){ //Checks if the client wants to use the Base64 Encode/Decode service
+                    broadcastMessageToSender("You have selected the File Entopy Analyzer service! Please upload the file you would like to analyze using the 'upload' command"); //Sends a message to the client with instructions on how to use the File Entropy Analyzer service
                 }else if(messageFromClient.equals("2")){
-                    broadcastMessageToSender("You have selected the File Entopy Analyzer service! Please enter the file you would like to encode or decode in the following format: \nentropy file path"); //Sends a message to the client with instructions on how to use the File Entropy Analyzer service
-                }
-                else if(messageFromClient.equals("list")){
+                    broadcastMessageToSender("You have selected the Base64 Encode/Decode service! Please enter the text you would like to encode or decode in the following format: \nTo Encode a file: encode file\nTo Decode a file: decode file\nTo Encode text: encode <text>\nTo Decode text: decode <text>\nTo upload a file please enter the 'upload' command"); //Sends a message to the client with instructions on how to use the Base64 Encode/Decode service
+                }else if(messageFromClient.equals("list")){
                     broadcastMessageToSender(serviceOptions);
                 } else if (messageFromClient.startsWith("encode ")){ //Checks if the client wants to encode a message
-                    String textToEncode = messageFromClient.substring(7); //Extracts the text to encode from the client's message by removing the "encode " prefix, allowing the server to process only the relevant text for encoding
-                    String encodedText = Base64.encode(textToEncode.getBytes()); //Encodes the extracted text using Base64 encoding, converting it into a format that can be easily transmitted and decoded by clients that understand Base64
-                    broadcastMessageToSender("Encoded Text: " + encodedText); //Sends the encoded text back to the client that requested it, allowing them to see the result of their encoding request
+                    if(messageFromClient.equals("encode file")){
+                        if(currentFile == null){
+                            broadcastMessageToSender("No file uploaded. Please upload a file first by typing 'upload'.");
+                        } else {
+                            String encodedText = Base64.encode(currentFile.getData()); 
+                            broadcastMessageToSender("Encoded File (" + currentFile.getFileName() + "): " + encodedText);
+                        }
+                    } else {
+                        String textToEncode = messageFromClient.substring(7);
+                        String encodedText = Base64.encode(textToEncode.getBytes());
+                        broadcastMessageToSender("Encoded Text: " + encodedText);
+                    }
                 } else if (messageFromClient.startsWith("decode ")){ //Checks if the client wants to decode a message
-                    String textToDecode = messageFromClient.substring(7); //Extracts the text to decode from the client's message by removing the "decode " prefix, allowing the server to process only the relevant text for decoding
-                    String decodedText = Base64.decode(textToDecode); //Decodes the extracted text using Base64 decoding, converting it back into its original format for clients that understand Base64
-                    broadcastMessageToSender("Decoded Text: " + decodedText); //Sends the decoded text back to the client that requested it, allowing them to see the result of their decoding request
+                   if(messageFromClient.equals("decode file")){
+                        if(currentFile == null){
+                            broadcastMessageToSender("No file uploaded. Please upload a file first by typing 'upload'.");
+                        } else {
+                            String decodedText = Base64.decode(new String(currentFile.getData()));
+                            broadcastMessageToSender("Decoded File (" + currentFile.getFileName() + "): " + decodedText);
+                        }
+                    } else {
+                        String textToDecode = messageFromClient.substring(7);
+                        String decodedText = Base64.decode(textToDecode);
+                        broadcastMessageToSender("Decoded Text: " + decodedText);
+                    }
                 } else if(messageFromClient.startsWith("entropy")) {
-                    Double entropy = FileEntropyAnalyzer.EntropyAnalyzer.calculateEntropy(messageFromClient.substring(8));
-                    broadcastMessageToSender("File Entropy: " + entropy);;
+
                 }else {
                     broadcastMessageToSender("Invalid input. Please enter a valid option or follow the instructions for encoding/decoding."); //Sends an error message back to the client if their input does not match any valid commands, guiding them towards correct usage of the services
                 }
             } catch (Exception e) {
-               closeEverything(socket, bufferedReader, bufferedWriter); 
+               closeEverything(socket, dataInputStream, dataOutputStream); 
                break; //If the client disconects the loop will break and the thread will end 
             }
+        }
+    }
+
+    public static String getFileExtension(String fileName){
+        int i = fileName.lastIndexOf('.'); //Finds the last occurrence of the '.' character in the file name, which is typically used to separate the file name from its extension
+
+        if(i > 0){
+            return fileName = fileName.substring(i + 1); //Extracts the substring of the file name that comes after the last '.', which is the file extension
+        }else{
+            return "No extension found"; //Returns a message indicating that no file extension was found if there is no '.' character in the file name
+        }
+    }
+
+    //Created following a tutorial on YouTube by WittCode (https://www.youtube.com/watch?v=GLrlwwyd1gY&t=97s) and modified by BrodyChev86 to fit the requirements of the project
+    public void fileUpload(){
+         try{
+            int fileNameLength = dataInputStream.readInt();
+            if(fileNameLength > 0){
+                byte[] fileNameBytes = new byte[fileNameLength];
+                dataInputStream.readFully(fileNameBytes, 0 , fileNameBytes.length);
+                String fileName = new String(fileNameBytes);
+
+                int fileDataLength = dataInputStream.readInt();
+
+                if(fileDataLength > 0){
+                    byte[] fileDataBytes = new byte[fileDataLength];
+                    dataInputStream.readFully(fileDataBytes, 0, fileDataBytes.length);
+
+                    fileHandlers.add(new FileHandler(fileId, fileName, fileDataBytes, getFileExtension(fileName))); //Creates a new FileHandler object with the received file data and adds it to the static list of file handlers, allowing the server to manage and access the uploaded file for entropy analysis when requested by clients
+                    currentFile = fileHandlers.get(fileHandlers.size() - 1); //Sets the current file to the most recently uploaded file, allowing the server to reference this file for any immediate operations that may be requested by the client after uploading
+                    fileId++; //Increments the file ID counter to ensure that the next uploaded file receives a unique ID
+                    System.out.println("Received file: " + fileName + " with size: " + fileDataBytes.length + " bytes"); //Prints a message to the server console indicating that a file has been received, along with its name and size in bytes for verification and debugging purposes
+
+                }
+
+            }
+        }catch (IOException e) {
+            e.printStackTrace();
         }
     }
 
@@ -82,12 +140,11 @@ public class ClientHandler implements Runnable {
         for (ClientHandler clientHandler : clientHandlers) {
             try {
                if(!clientHandler.clientUsername.equals(clientUsername)){ //Checks if the client handler is not the same as the one that sent the message, preventing the server from sending the message back to the sender
-                    clientHandler.bufferedWriter.write(messageToSend);
-                    clientHandler.bufferedWriter.newLine();
-                    clientHandler.bufferedWriter.flush();
+                    clientHandler.dataOutputStream.writeUTF(messageToSend);
+                    clientHandler.dataOutputStream.flush();
                }
             } catch (IOException e) {
-                closeEverything(socket, bufferedReader, bufferedWriter); 
+                closeEverything(socket, dataInputStream, dataOutputStream); 
             }
         }
     }
@@ -97,12 +154,11 @@ public class ClientHandler implements Runnable {
         for (ClientHandler clientHandler : clientHandlers) {
             try {
                if(clientHandler.clientUsername.equals(clientUsername)){ //Checks if the client handler is the same as the one that sent the message, allowing the server to send a message back to the sender
-                    clientHandler.bufferedWriter.write(messageToSend);
-                    clientHandler.bufferedWriter.newLine();
-                    clientHandler.bufferedWriter.flush();
+                    clientHandler.dataOutputStream.writeUTF(messageToSend);
+                    clientHandler.dataOutputStream.flush();
                }
             } catch (IOException e) {
-                closeEverything(socket, bufferedReader, bufferedWriter); 
+                closeEverything(socket, dataInputStream, dataOutputStream); 
             }
         }
     }
@@ -113,14 +169,14 @@ public class ClientHandler implements Runnable {
         System.out.println("A client has disconnected!"); //Prints a message to the server console indicating that a client has disconnected
     }
 
-    public void closeEverything(Socket socket, BufferedReader bufferedReader, BufferedWriter bufferedWriter){
+    public void closeEverything(Socket socket, DataInputStream dataInputStream, DataOutputStream dataOutputStream){
         removeClientHandler(); //Removes the client handler from the list of client handlers, ensuring that the server no longer tracks or communicates with the disconnected client
         try {
-            if (bufferedReader != null) {
-                bufferedReader.close(); //Closes the input stream reader, releasing any resources associated with it and preventing further reading from the client
+            if (dataInputStream != null) {
+                dataInputStream.close(); //Closes the input stream reader, releasing any resources associated with it and preventing further reading from the client
             }
-            if (bufferedWriter != null) {
-                bufferedWriter.close(); //Closes the output stream writer, releasing any resources associated with it and preventing further writing to the client
+            if (dataOutputStream != null) {
+                dataOutputStream.close(); //Closes the output stream writer, releasing any resources associated with it and preventing further writing to the client
             }
             if (socket != null) {
                 socket.close(); //Closes the socket connection between the server and the client, releasing any resources associated with it and preventing further communication with the client
@@ -129,4 +185,6 @@ public class ClientHandler implements Runnable {
             e.printStackTrace();
         }
     }
+
+   
 }

@@ -1,47 +1,61 @@
 package ServerClientTools;
-//Code created with the help of a tutorial on YouTube by WittCode (https://youtu.be/gLfuZrrfKes?si=r0TVgY7UQkRsKLtl) and modified by BrodyChev86 to fit the requirements of the project
+import java.awt.Dimension;
+import java.awt.Font;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.DataInputStream;
+//Code created with the help of a tutorial on YouTube by WittCode (https://youtu.be/gLfuZrrfKes?si=r0TVgY7UQkRsKLtl) and modified by BrodyChev86 to fit the requirements of the project
+import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.Socket;
 import java.util.Scanner;
 
+import javax.swing.BoxLayout;
+import javax.swing.JButton;
+import javax.swing.JFileChooser;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.border.EmptyBorder;
+
 public class Client {
     
     private Socket socket;
-    private BufferedReader bufferedReader;
-    private BufferedWriter bufferedWriter;
+    private DataOutputStream dataOutputStream;
+    private DataInputStream dataInputStream;
     private String username;
+    private volatile boolean isUploading = false;
+    final File[] fileToSend = new File[1];
 
     public Client(Socket socket, String username){
         try{
             this.socket = socket;
-            this.bufferedWriter = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
-            this.bufferedReader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            this.dataOutputStream = new DataOutputStream(socket.getOutputStream());
+            this.dataInputStream = new DataInputStream(socket.getInputStream());
             this.username = username;
         }catch (IOException e) {
-            closeEverything(socket, bufferedReader, bufferedWriter); 
+            closeEverything(socket, dataInputStream, dataOutputStream); 
         }
     }
 
     public void sendMessage(){
         try {
-            bufferedWriter.write(username);
-            bufferedWriter.newLine();
-            bufferedWriter.flush();
+            dataOutputStream.writeUTF(username);
+            dataOutputStream.flush();
 
             Scanner scanner = new Scanner(System.in);
             while (socket.isConnected()) {
                 String messageToSend = scanner.nextLine();
-                bufferedWriter.write(username + ": " + messageToSend);
-                bufferedWriter.newLine();
-                bufferedWriter.flush();
+                dataOutputStream.writeUTF(username + ": " + messageToSend);
+                dataOutputStream.flush();
             }
             scanner.close();
         } catch (IOException e) {
-            closeEverything(socket, bufferedReader, bufferedWriter); 
+            closeEverything(socket, dataInputStream, dataOutputStream); 
         }
     }
 
@@ -53,23 +67,105 @@ public class Client {
 
                 while (socket.isConnected()) {
                     try {
-                        msgFromGroupChat = bufferedReader.readLine();
+                        msgFromGroupChat = dataInputStream.readUTF();
+                        if(msgFromGroupChat.equals("FILE_UPLOAD")){
+                            isUploading = true;
+                            fileUpload(); //If the server sends a message indicating that the client should select a file to upload, call the fileUpload method to handle the file upload process
+
+                            continue;
+                        }
                         System.out.println(msgFromGroupChat);
                     } catch (IOException e) {
-                        closeEverything(socket, bufferedReader, bufferedWriter); 
+                        closeEverything(socket, dataInputStream, dataOutputStream); 
                     }
                 }
+            }
+
+            //Created following a tutorial on YouTube by WittCode (https://www.youtube.com/watch?v=GLrlwwyd1gY&t=97s) and modified by BrodyChev86 to fit the requirements of the project
+            private void fileUpload() {
+                JFrame jFrame = new JFrame("File Upload");
+                jFrame.setSize(450, 450);
+                jFrame.setLayout(new BoxLayout(jFrame.getContentPane(), BoxLayout.Y_AXIS));
+                jFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+
+                JLabel jLabelTitle = new JLabel("File Upload");
+                jLabelTitle.setFont(new Font("Arial", Font.BOLD, 25));
+                jLabelTitle.setBorder(new EmptyBorder(20,0,10,0));
+                jLabelTitle.setAlignmentX(jFrame.CENTER_ALIGNMENT);
+
+                JLabel jLabelFileName =  new JLabel("Choose a file to send");
+                jLabelFileName.setFont(new Font("Arial", Font.BOLD, 20));
+                jLabelFileName.setBorder(new EmptyBorder(50,0,0,0));
+                jLabelFileName.setAlignmentX(jFrame.CENTER_ALIGNMENT);
+
+                JPanel jPanelButtons = new JPanel();
+                jPanelButtons.setBorder(new EmptyBorder(75,0,10,0));
+
+                JButton jButtonSendFile = new JButton("Send File");
+                jButtonSendFile.setPreferredSize(new Dimension(150, 75));
+                jButtonSendFile.setFont(new Font("Arial", Font.BOLD, 20));
+
+                JButton jButtonChooseFile = new JButton("Choose File");
+                jButtonChooseFile.setPreferredSize(new Dimension(150, 75));
+                jButtonChooseFile.setFont(new Font("Arial", Font.BOLD, 20));
+
+                jPanelButtons.add(jButtonChooseFile);
+                jPanelButtons.add(jButtonSendFile);
+
+                jButtonChooseFile.addActionListener(e -> {
+                    JFileChooser jFileChooser = new JFileChooser();
+                    jFileChooser.setDialogTitle("Chose a file to send");
+
+                    if(jFileChooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION){
+                        fileToSend[0] = jFileChooser.getSelectedFile();
+                        jLabelFileName.setText("The file you want to send is: " +fileToSend[0].getName());
+                    }
+                });
+
+                jButtonSendFile.addActionListener(e -> {
+                    if(fileToSend[0] == null){
+                        jLabelFileName.setText("Please choose a file before sending");
+                        isUploading = false;
+                    }else{
+                        try {
+                            FileInputStream fileInputStream = new FileInputStream(fileToSend[0].getAbsolutePath());
+
+                            String fileName = fileToSend[0].getName();
+                            byte[] fileNameBytes = fileName.getBytes();
+
+                            byte[] fileContentBytes = new byte[(int) fileToSend[0].length()];
+                            fileInputStream.read(fileContentBytes);
+
+                            dataOutputStream.writeInt(fileNameBytes.length);
+                            dataOutputStream.write(fileNameBytes);
+
+                            dataOutputStream.writeInt(fileContentBytes.length);
+                            dataOutputStream.write(fileContentBytes);
+
+                            fileInputStream.close();
+                            isUploading = false;
+                        } catch (IOException error) {
+                            error.printStackTrace();
+                        }
+                        
+                }});
+
+                jFrame.add(jLabelTitle);
+                jFrame.add(jLabelFileName);
+                jFrame.add(jPanelButtons);
+                jFrame.setVisible(true);
+
             }
         }).start();  
     }
 
-    public void closeEverything(Socket socket, BufferedReader bufferedReader, BufferedWriter bufferedWriter){
+    public void closeEverything(Socket socket, DataInputStream dataInputStream, DataOutputStream dataOutputStream){
         try {
-            if (bufferedReader != null) {
-                bufferedReader.close();
+            if (dataInputStream != null) {
+                dataInputStream.close();
             }
-            if (bufferedWriter != null) {
-                bufferedWriter.close();
+            if (dataOutputStream != null) {
+                dataOutputStream.close();
             }
             if (socket != null) {
                 socket.close();

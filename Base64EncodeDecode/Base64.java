@@ -4,15 +4,13 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import javax.imageio.ImageIO;
 
 public class Base64{
+
+    private static byte[] fileData;
     public static void main(String[] args) {
-        String inputFilePath = "C:\\Users\\brody\\CSC340\\Project1\\CSC340_Project1_MicroservicesCluster\\Base64EncodeDecode\\TestImage.jpg"; // Update this path to your input file
         try{
-            byte[] fileData = readFile(inputFilePath);
             String encoded = encode(fileData);
             System.out.println("Encoded: " + encoded);
             String decoded = decode(encoded);
@@ -46,8 +44,8 @@ public class Base64{
         return java.util.Base64.getDecoder().decode(input);
     }
 
-    public static byte[] readFile(String filePath) throws IOException {
-        return Files.readAllBytes(Paths.get(filePath));
+    public void setFileData(byte[] fileData) {
+        Base64.fileData = fileData;
     }
 
     public BufferedImage decodeToImage(byte[] decodedBytes) {

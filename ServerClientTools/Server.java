@@ -80,7 +80,7 @@ public class Server {
             ServerSocket serverSocket = new ServerSocket(1234); //Creates a server socket that listens on port 1234 for incoming client connections.
             DatagramSocket datagramSocket = new DatagramSocket(1235); //Creates a datagram socket that listens on port 1235 for incoming UDP packets.
             Server server = new Server(serverSocket, datagramSocket);
-            System.out.println("Server is listening on port 1234...");
+            System.out.println("Server is listening on port 1234 for TCP connections and port 1235 for UDP packets...");
             server.startServer(); //Starts the server to accept and handle client connections.
     }
 }

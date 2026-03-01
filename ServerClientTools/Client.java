@@ -71,20 +71,20 @@ public class Client {
     }
 
     public void listenForMessage(){
-        new Thread(new Runnable(){ //Creates a new thread to listen for incoming messages from the server since this is a blocking operation
+        new Thread(new Runnable(){
             @Override
             public void run() {
-                String msgFromGroupChat;
+                String msgFromServer;
 
                 while (socket.isConnected()) {
                     try {
-                        msgFromGroupChat = dataInputStream.readUTF();
-                        if(msgFromGroupChat.equals("FILE_UPLOAD")){
+                        msgFromServer = dataInputStream.readUTF();
+                        if(msgFromServer.equals("FILE_UPLOAD")){
                             isUploading = true;
                             fileUpload(); // prompt user to pick files
                             continue;
                         }
-                        System.out.println(msgFromGroupChat);
+                        System.out.println(msgFromServer);
                     } catch (IOException e) {
                         closeEverything(socket, dataInputStream, dataOutputStream);
                     }

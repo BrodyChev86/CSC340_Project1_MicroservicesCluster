@@ -16,7 +16,7 @@ public class ClientHandler implements Runnable {
     private Socket socket; //Used to establish a connection between the server and a specific client
     private DataInputStream dataInputStream; //Used to read binary data from the client, such as files for entropy analysis
     private String clientUsername;
-    private final String serviceOptions = "Please indicate which service you would like to use: \n1. Calculate File Entropy\n2. Base64 Encode/Decode\nType 'list' to see these options again at any time!"; //A string that contains the options for the services offered by the server, which is sent to clients to guide them in choosing a service
+    private final String serviceOptions = "To Encode a file: encode file\nTo Decode a file: decode file\nTo Encode text: encode <text>\nTo Decode text: decode <text>\nTo upload a file please enter the 'upload' command \nType 'list' to see these options again at any time!"; //A string that contains the options for the services offered by the server, which is sent to clients to guide them in choosing a service
     private DataOutputStream dataOutputStream;
     private int fileId = 0; //A counter used to assign unique IDs to uploaded files, allowing the server to manage and reference these files
     private FileHandler currentFile = null;

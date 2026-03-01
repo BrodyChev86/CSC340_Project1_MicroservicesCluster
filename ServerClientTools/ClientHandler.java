@@ -29,7 +29,6 @@ public class ClientHandler implements Runnable {
             this.dataOutputStream = new DataOutputStream(socket.getOutputStream()); //Initializes the data output stream for sending binary data back to the client
             this.clientUsername = dataInputStream.readUTF(); //Reads the client's username from the input stream, allowing the server to identify and manage the client based on their username
             clientHandlers.add(this); //Adds the current client handler instance to the static list of client handlers, enabling the server to keep track of all connected clients and facilitate communication between them
-            broadcastMessage("SERVER: " + clientUsername + " has connected"); //Sends a message to all connected clients notifying them that a new client has joined 
             broadcastMessageToSender(serviceOptions); //Sends a message to the client that just connected asking them to choose a service
         } catch (IOException e) {
             closeEverything(socket, dataInputStream, dataOutputStream); 

@@ -207,6 +207,10 @@ public class Client {
                                                        // localhost at port 1234, allowing the client to communicate
                                                        // with the server and other clients connected to it
         Client client = new Client(socket, username);
+
+        client.dataOutputStream.writeUTF("CLIENT_HELLO"); // Sends an initial message to the server to identify itself as a client, allowing the server to manage the connection appropriately
+        client.dataOutputStream.flush();
+        
         client.listenForMessage(); // Starts a thread to listen for incoming messages from the server, enabling the
                                    // client to receive messages from other clients in real-time
         client.sendMessage(); // Starts sending messages to the server, allowing the client to participate in

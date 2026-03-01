@@ -1,8 +1,7 @@
 package ServerClientTools;
-import java.io.BufferedReader;
+import java.io.DataInputStream;
 //Code created with the help of a tutorial on YouTube by WittCode (https://youtu.be/gLfuZrrfKes?si=r0TVgY7UQkRsKLtl) and modified by BrodyChev86 to fit the requirements of the project
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.ServerSocket;
@@ -44,9 +43,8 @@ public class Server {
                 try {
                     Socket socket = serverSocket.accept();
                     // Read the first message the connector sends to identify itself
-                    BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(socket.getInputStream()));
-                    String identity = reader.readLine();
+                    DataInputStream reader = new DataInputStream(socket.getInputStream());
+                    String identity = reader.readUTF();
 
                     if (identity != null && identity.equals("NODE_HELLO")) {
                         String ip = socket.getInetAddress().getHostAddress();

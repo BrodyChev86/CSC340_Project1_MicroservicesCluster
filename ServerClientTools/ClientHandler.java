@@ -20,6 +20,7 @@ public class ClientHandler implements Runnable {
     private DataOutputStream dataOutputStream;
     private int fileId = 0; //A counter used to assign unique IDs to uploaded files, allowing the server to manage and reference these files
     private FileHandler currentFile = null;
+    private volatile boolean isUploading = false; //A flag used to indicate whether a file upload is currently in progress, allowing the server to manage the file upload process and prevent conflicts with other operations
 
     public ClientHandler(Socket socket){
         try {
@@ -49,6 +50,7 @@ public class ClientHandler implements Runnable {
 
                 if(messageFromClient.equals("upload")){
                     broadcastMessageToSender("FILE_UPLOAD");
+                    isUploading = true;
                     fileUpload(); //If the client sends a message indicating that they want to upload a file, call the fileUpload method to handle the file upload process
                 }else if(messageFromClient.equals("exit")){
                     removeClientHandler(); 
@@ -110,25 +112,33 @@ public class ClientHandler implements Runnable {
     //Created following a tutorial on YouTube by WittCode (https://www.youtube.com/watch?v=GLrlwwyd1gY&t=97s) and modified by BrodyChev86 to fit the requirements of the project
     public void fileUpload(){
          try{
-            int fileNameLength = dataInputStream.readInt();
-            if(fileNameLength > 0){
-                byte[] fileNameBytes = new byte[fileNameLength];
-                dataInputStream.readFully(fileNameBytes, 0 , fileNameBytes.length);
-                String fileName = new String(fileNameBytes);
+            while(isUploading){
 
-                int fileDataLength = dataInputStream.readInt();
+                int fileNameLength = dataInputStream.readInt();
+                if (fileNameLength == 0) { // sentinel value received — client is done uploading
+                    isUploading = false;
+                    broadcastMessageToSender("File upload complete.");
+                    break;
+                }
+                if(fileNameLength > 0){
+                    byte[] fileNameBytes = new byte[fileNameLength];
+                    dataInputStream.readFully(fileNameBytes, 0 , fileNameBytes.length);
+                    String fileName = new String(fileNameBytes);
 
-                if(fileDataLength > 0){
-                    byte[] fileDataBytes = new byte[fileDataLength];
-                    dataInputStream.readFully(fileDataBytes, 0, fileDataBytes.length);
+                    int fileDataLength = dataInputStream.readInt();
 
-                    fileHandlers.add(new FileHandler(fileId, fileName, fileDataBytes, getFileExtension(fileName))); //Creates a new FileHandler object with the received file data and adds it to the static list of file handlers, allowing the server to manage and access the uploaded file for entropy analysis when requested by clients
-                    currentFile = fileHandlers.get(fileHandlers.size() - 1); //Sets the current file to the most recently uploaded file, allowing the server to reference this file for any immediate operations that may be requested by the client after uploading
-                    fileId++; //Increments the file ID counter to ensure that the next uploaded file receives a unique ID
-                    System.out.println("Received file: " + fileName + " with size: " + fileDataBytes.length + " bytes"); //Prints a message to the server console indicating that a file has been received, along with its name and size in bytes for verification and debugging purposes
+                    if(fileDataLength > 0){
+                        byte[] fileDataBytes = new byte[fileDataLength];
+                        dataInputStream.readFully(fileDataBytes, 0, fileDataBytes.length);
+
+                        fileHandlers.add(new FileHandler(fileId, fileName, fileDataBytes, getFileExtension(fileName))); //Creates a new FileHandler object with the received file data and adds it to the static list of file handlers, allowing the server to manage and access the uploaded file for entropy analysis when requested by clients
+                        currentFile = fileHandlers.get(fileHandlers.size() - 1); //Sets the current file to the most recently uploaded file, allowing the server to reference this file for any immediate operations that may be requested by the client after uploading
+                        fileId++; //Increments the file ID counter to ensure that the next uploaded file receives a unique ID
+                        System.out.println("Received file: " + fileName + " with size: " + fileDataBytes.length + " bytes"); //Prints a message to the server console indicating that a file has been received, along with its name and size in bytes for verification and debugging purposes
+
+                    }
 
                 }
-
             }
         }catch (IOException e) {
             e.printStackTrace();

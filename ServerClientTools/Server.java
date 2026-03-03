@@ -76,7 +76,7 @@ public class Server {
                     DataInputStream reader = new DataInputStream(socket.getInputStream());
                     String identity = reader.readUTF();
 
-                    if (identity != null && identity.equals("ENTROPY_HELLO")) {
+                    if (identity != null && identity.equals("NODE_HELLO")) {
                         InetAddress ip = socket.getInetAddress();
                         nodeAddresses.add(ip); // Register node IP for reference
                         System.out.println("Node connected: " + ip);

@@ -81,7 +81,7 @@ public class EntropyNode {
                                                        // with the server and other clients connected to it
         EntropyNode entropyNode = new EntropyNode(socket, service);
 
-        entropyNode.dataOutputStream.writeUTF("ENTROPY_HELLO"); // Sends an initial message to the server to identify
+        entropyNode.dataOutputStream.writeUTF("NODE_HELLO"); // Sends an initial message to the server to identify
                                                                 // itself as a node, allowing the server to manage the
                                                                 // connection appropriately
         entropyNode.dataOutputStream.flush();

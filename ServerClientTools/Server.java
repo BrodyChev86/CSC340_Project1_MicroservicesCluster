@@ -8,8 +8,12 @@ import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.Set;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class Server {
@@ -25,19 +29,43 @@ public class Server {
     }
 
     public void startServer() throws IOException {
+
+        Timer cleanupTimer = new Timer(true);
+        cleanupTimer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                Instant now = Instant.now();
+                ServiceNodeHandler.getAllNodes().values().removeIf(node -> {
+                    if (Duration.between(node.getLastHeartbeat(), now).getSeconds() > 30) {
+                        System.out.println("[TIMEOUT] Removing stale node: " + node.getNodeName());
+                        node.disconnect(); // Close its socket
+                        return true;
+                    }
+                    return false;
+                });
+            }
+        }, 5000, 5000);
+        
         // UDP listener thread — identifies nodes
         Thread udpThread = new Thread(() -> {
-            while (!datagramSocket.isClosed()) {
-                try {
-                    DatagramPacket packet = new DatagramPacket(incomingData, incomingData.length);
-                    receiveUDPMessages(packet);
-                    new Thread(new ServiceNodeHandler(serverSocket.accept(), datagramSocket)).start();
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    break;
+        byte[] buffer = new byte[1024];
+        while (!datagramSocket.isClosed()) {
+            try {
+                DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+                datagramSocket.receive(packet); // Blocks until a heartbeat arrives
+                
+                String message = new String(packet.getData(), 0, packet.getLength()).trim();
+                InetAddress nodeIp = packet.getAddress();
+
+                if (message.equals("NODE_ALIVE")) {
+                    System.out.println("[UDP] packet from " + nodeIp + " payload='" + message + "'");
+                    updateNodeStatus(nodeIp.getHostAddress(), message);
                 }
+            } catch (IOException e) {
+                if (!datagramSocket.isClosed()) e.printStackTrace();
             }
-        });
+        }
+    });
 
         // TCP listener thread — accepts both clients and nodes
         Thread tcpThread = new Thread(() -> {
@@ -68,6 +96,23 @@ public class Server {
         tcpThread.start();
     }
 
+    private void updateNodeStatus(String hostAddress, String messageFromNode) {
+        if (messageFromNode.trim().equals("NODE_ALIVE")) {
+        // Iterate through connected nodes to find the one matching this IP
+        for (ServiceNodeHandler handler : ServiceNodeHandler.getAllNodes().values()) {
+            InetAddress tcpAddress = handler.getSocket().getInetAddress();
+            // compare using equals for robustness
+            if (tcpAddress != null && tcpAddress.getHostAddress().equals(hostAddress)) {
+                handler.refreshHeartbeat();
+                System.out.println("[DEBUG] Heartbeat refreshed for node: " + hostAddress);
+                return;
+            }
+        }
+        // nothing matched
+        //System.out.println("[WARN] No handler found for heartbeat from " + hostAddress + " (registered nodes: "+ ServiceNodeHandler.getAllNodes().keySet() + ")");
+    }
+    }
+
     public void receiveUDPMessages(DatagramPacket packet) {
         try {
             datagramSocket.receive(packet);
@@ -81,10 +126,6 @@ public class Server {
             e.printStackTrace();
                 
         }
-    }
-
-    private void updateNodeStatus(String hostAddress, String messageFromNode) {
-        System.out.println("Updating status for node " + hostAddress + ": " + messageFromNode);
     }
 
     public void closeServerSocket() {

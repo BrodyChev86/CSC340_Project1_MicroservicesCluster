@@ -19,6 +19,7 @@ import javax.imageio.ImageIO;
 public class Base64{
 
     private static byte[] fileData;
+    private byte[] outgoingData = new byte[1024];
     private Socket socket;
     private DatagramSocket datagramSocket;
     private DataOutputStream dataOutputStream;
@@ -107,15 +108,12 @@ public class Base64{
         }
     }
 
-    public void sendHeartbeat() {
-        try {
-            String heartbeatMessage = "NODE_ALIVE";
-            dataOutputStream.writeUTF(heartbeatMessage);
-            dataOutputStream.flush();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+    public void sendHeartbeat(String message, InetAddress address, int port) throws IOException {
+        outgoingData = message.getBytes();
+        DatagramPacket sendPacket = new DatagramPacket(outgoingData, outgoingData.length, address, port);
+        datagramSocket.send(sendPacket);
     }
+    
 
     public void listenForMessage(){
         new Thread(new Runnable(){
@@ -171,12 +169,19 @@ public class Base64{
         base64.dataOutputStream.writeUTF("NODE_HELLO"); 
         base64.dataOutputStream.flush();
 
+        base64.dataOutputStream.writeUTF("Base64Node");
+        base64.dataOutputStream.flush();
+
         Timer timer = new Timer(true); // daemon=true so it doesn't block JVM shutdown
         timer.scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {
-                base64.sendHeartbeat();
-                System.out.println("Sent heartbeat to server: NODE_ALIVE");
+                try {
+                    base64.sendHeartbeat("NODE_ALIVE", InetAddress.getByName("localhost"), 1235);
+                    System.out.println("Sent heartbeat to server: NODE_ALIVE");
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
             }
         }, 0, 5000);
 

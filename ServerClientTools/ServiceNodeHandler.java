@@ -18,24 +18,29 @@ public class ServiceNodeHandler implements Runnable {
 
     public ServiceNodeHandler(Socket socket, DatagramSocket datagramSocket) {
         try {
-            this.socket = socket;
-            this.datagramSocket = datagramSocket;
-            this.dataInputStream = new DataInputStream(socket.getInputStream());
-            this.dataOutputStream = new DataOutputStream(socket.getOutputStream());
-            this.nodeName = dataInputStream.readUTF();
-            this.lastHeartbeat = Instant.now();
+        this.socket = socket;
+        this.datagramSocket = datagramSocket;
+        this.dataInputStream = new DataInputStream(socket.getInputStream());
+        this.dataOutputStream = new DataOutputStream(socket.getOutputStream());
+        this.nodeName = dataInputStream.readUTF();
+        this.lastHeartbeat = Instant.now();
 
-            // If a node reconnects, replace the old stale handler
-            ServiceNodeHandler previous = connectedNodes.put(nodeName, this);
-            if (previous != null) {
-                System.out.println("[WARN] Node " + nodeName + " reconnected, replacing stale handler.");
-            } else {
-                System.out.println("[INFO] Node connected: " + nodeName);
-            }
-
-        } catch (IOException e) {
-            e.printStackTrace();
+        ServiceNodeHandler previous = connectedNodes.put(nodeName, this);
+        if (previous != null) {
+            System.out.println("[WARN] Node " + nodeName + " reconnected, replacing stale handler.");
+        } else {
+            System.out.println("[INFO] Node connected: " + nodeName);
         }
+
+    } catch (IOException e) {
+        // Instead of e.printStackTrace(), print a clean message
+        System.err.println("[ERROR] Failed to initialize Node Handler: " + e.getMessage());
+        try {
+            if (socket != null) socket.close();
+        } catch (IOException ex) {
+            // Ignore secondary close errors
+        }
+    }
     }
 
     public static boolean isNodeConnected(String name) {
@@ -50,6 +55,14 @@ public class ServiceNodeHandler implements Runnable {
         return connectedNodes;
     }
 
+    public Socket getSocket() {
+        return socket;
+    }
+
+    public String getNodeName() {
+        return nodeName;
+    }
+
     // Called internally when the heartbeat arrives
     public void refreshHeartbeat() {
         this.lastHeartbeat = Instant.now();
@@ -59,7 +72,7 @@ public class ServiceNodeHandler implements Runnable {
         return lastHeartbeat;
     }
 
-    private void disconnect() {
+    public void disconnect() {
         connectedNodes.remove(nodeName);
         System.out.println("[INFO] Node disconnected: " + nodeName);
         try {
@@ -90,35 +103,18 @@ public class ServiceNodeHandler implements Runnable {
 
     @Override
     public void run() {
-        // Move timer outside the while loop — you only need one
-        Timer timer = new Timer(true); // daemon=true so it doesn't block JVM shutdown
-        timer.scheduleAtFixedRate(new TimerTask() {
-            @Override
-            public void run() {
-                try {
-                    sendUDPMessage("NODE_ALIVE", InetAddress.getByName("localhost"), 1235);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        }, 0, 5000);
-
         try {
             String messageFromNode;
             while (socket.isConnected()) {
                 messageFromNode = dataInputStream.readUTF().trim();
-
-                if (messageFromNode.equals("NODE_ALIVE")) {
-                    refreshHeartbeat(); // Update last seen time on heartbeat
-                } else {
-                    processRequest(messageFromNode);
-                }
+                System.out.println("Message from node " + nodeName + ": " + messageFromNode);
             }
-        } catch (IOException e) {
-            e.printStackTrace();
-        } finally {
-            timer.cancel();
-            disconnect(); 
+        } catch (EOFException e) {
+            System.out.println("[INFO] Node " + nodeName + " closed the connection.");
+        } catch(IOException e){
+            System.out.println("[WARN] Connection lost with node: " + nodeName);
+        }finally {
+        disconnect();
         }
     }
 }

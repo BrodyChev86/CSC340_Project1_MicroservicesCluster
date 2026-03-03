@@ -7,7 +7,7 @@ public class EntropyNode {
         try (ServerSocket serverSocket = new ServerSocket(6000)) {
             while (true) {
                 Socket socket = serverSocket.accept();
-                new Thread(new ServiceNodeHandler(socket)).start();
+                //new Thread(new ServiceNodeHandler(socket)).start();
             }
         }
     }

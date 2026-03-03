@@ -6,8 +6,13 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.net.Socket;
 import java.util.Scanner;
+import java.util.Timer;
+import java.util.TimerTask;
 
 import javax.imageio.ImageIO;
 
@@ -15,14 +20,16 @@ public class Base64{
 
     private static byte[] fileData;
     private Socket socket;
+    private DatagramSocket datagramSocket;
     private DataOutputStream dataOutputStream;
     private DataInputStream dataInputStream;
     private String username;
     private java.util.List<File> filesToSend = new java.util.ArrayList<>();
 
-    public Base64(Socket socket, String username) {
+    public Base64(Socket socket, DatagramSocket datagramSocket, String username) {
         try {
             this.socket = socket;
+            this.datagramSocket = datagramSocket;
             this.dataOutputStream = new DataOutputStream(socket.getOutputStream());
             this.dataInputStream = new DataInputStream(socket.getInputStream());
             this.username = username;
@@ -31,12 +38,6 @@ public class Base64{
         }
     }
     
-    public static void main(String[] args) throws Exception {
-        Socket socket = new Socket("localhost", 1234);
-        Base64 base64 = new Base64(socket, "Base64Node");
-        registerWithClientHandler();
-    }
-
     public static String encode(byte[] data) {
             return java.util.Base64.getEncoder().encodeToString(data);
     }
@@ -106,6 +107,16 @@ public class Base64{
         }
     }
 
+    public void sendHeartbeat() {
+        try {
+            String heartbeatMessage = "NODE_ALIVE";
+            dataOutputStream.writeUTF(heartbeatMessage);
+            dataOutputStream.flush();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
     public void listenForMessage(){
         new Thread(new Runnable(){
             @Override
@@ -149,9 +160,27 @@ public class Base64{
         }
     }
 
-    private static void registerWithClientHandler() throws Exception {
-        Socket socket = new Socket("Localhost", 1234); //Localhost will need to be changed to the IP address of the machine running the ClientHandler when testing on multiple machines
-        socket.getOutputStream().write("REGISTER BASE64".getBytes());
-        socket.close();
+   
+
+
+     public static void main(String[] args) throws Exception {
+        Socket socket = new Socket("localhost", 1234);
+        DatagramSocket datagramSocket = new DatagramSocket();
+        Base64 base64 = new Base64(socket, datagramSocket, "Base64Node");
+        
+        base64.dataOutputStream.writeUTF("NODE_HELLO"); 
+        base64.dataOutputStream.flush();
+
+        Timer timer = new Timer(true); // daemon=true so it doesn't block JVM shutdown
+        timer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                base64.sendHeartbeat();
+                System.out.println("Sent heartbeat to server: NODE_ALIVE");
+            }
+        }, 0, 5000);
+
+        base64.listenForMessage();
     }
+
 }

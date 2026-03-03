@@ -4,6 +4,8 @@ import java.io.DataInputStream;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.Inet4Address;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Collections;
@@ -12,27 +14,27 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class Server {
     private ServerSocket serverSocket;
-    private DatagramSocket datagramSocket = null;
+    private DatagramSocket datagramSocket;
+    private byte[] incomingData = new byte[1024];
+    private Set<InetAddress> nodeAddresses = Collections.newSetFromMap(new ConcurrentHashMap<>());
+
 
     public Server(ServerSocket serverSocket, DatagramSocket datagramSocket) {
         this.serverSocket = serverSocket;
         this.datagramSocket = datagramSocket;
     }
 
-    public void startServer() {
-        Set<String> nodeAddresses = Collections.newSetFromMap(new ConcurrentHashMap<>());
-
+    public void startServer() throws IOException {
         // UDP listener thread — identifies nodes
         Thread udpThread = new Thread(() -> {
-            byte[] incomingData = new byte[1024];
             while (!datagramSocket.isClosed()) {
-                DatagramPacket packet = new DatagramPacket(incomingData, incomingData.length);
                 try {
-                    datagramSocket.receive(packet);
-                    String ip = packet.getAddress().getHostAddress();
-                    nodeAddresses.add(ip);
-                } catch (IOException e) {
+                    DatagramPacket packet = new DatagramPacket(incomingData, incomingData.length);
+                    receiveUDPMessages(packet);
+                    new Thread(new ServiceNodeHandler(serverSocket.accept(), datagramSocket)).start();
+                } catch (Exception e) {
                     e.printStackTrace();
+                    break;
                 }
             }
         });
@@ -47,12 +49,12 @@ public class Server {
                     String identity = reader.readUTF();
 
                     if (identity != null && identity.equals("NODE_HELLO")) {
-                        String ip = socket.getInetAddress().getHostAddress();
+                        InetAddress ip = socket.getInetAddress();
                         nodeAddresses.add(ip); // Register node IP for reference
                         System.out.println("Node connected: " + ip);
-                        new Thread(new ServiceNodeHandler(socket)).start();
+                        new Thread(new ServiceNodeHandler(socket, datagramSocket)).start();
                     } else {
-                        String ip = socket.getInetAddress().getHostAddress();
+                        InetAddress ip = socket.getInetAddress();
                         System.out.println("Client connected: " + ip);
                         new Thread(new ClientHandler(socket)).start();
                     }
@@ -64,6 +66,25 @@ public class Server {
 
         udpThread.start();
         tcpThread.start();
+    }
+
+    public void receiveUDPMessages(DatagramPacket packet) {
+        try {
+            datagramSocket.receive(packet);
+            InetAddress ip = packet.getAddress();
+            nodeAddresses.add(ip);
+            int port = packet.getPort();
+            String messageFromNode = new String(packet.getData(), 0, packet.getLength());
+            System.out.println("Received UDP message from " + ip.getHostAddress() + ":" + port + " - " + messageFromNode);
+            updateNodeStatus(ip.getHostAddress(), messageFromNode);
+        } catch (IOException e) {
+            e.printStackTrace();
+                
+        }
+    }
+
+    private void updateNodeStatus(String hostAddress, String messageFromNode) {
+        System.out.println("Updating status for node " + hostAddress + ": " + messageFromNode);
     }
 
     public void closeServerSocket() {

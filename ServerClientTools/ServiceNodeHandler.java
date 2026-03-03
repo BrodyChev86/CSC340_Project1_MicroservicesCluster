@@ -23,16 +23,15 @@ public class ServiceNodeHandler implements Runnable{
     private Instant lastHeartbeat;
     private static final ConcurrentHashMap<String, ServiceNodeHandler> connectedNodes = new ConcurrentHashMap<>();
 
-    public ServiceNodeHandler(Socket socket, DatagramSocket datagramSocket, String service) {
+    public ServiceNodeHandler(Socket socket, DatagramSocket datagramSocket) {
         try {
         this.socket = socket;
         this.datagramSocket = datagramSocket;
         this.dataInputStream = new DataInputStream(socket.getInputStream());
         this.dataOutputStream = new DataOutputStream(socket.getOutputStream());
-        
+        service = dataInputStream.readUTF().trim(); // First message from node should be its service type
         this.lastHeartbeat = Instant.now();
         serviceNodeHandlers.add(this);
-        this.service = service;
 
         ServiceNodeHandler previous = connectedNodes.put(service, this);
         if (previous != null) {
@@ -175,22 +174,19 @@ public class ServiceNodeHandler implements Runnable{
 
     @Override
     public void run() {
-        //removing this code didn't seem to change anything, the node still disconnected without it
-        /*
         try {
             String messageFromNode;
             while (socket.isConnected()) {
                 messageFromNode = dataInputStream.readUTF().trim();
-                System.out.println("Message from node " + nodeName + ": " + messageFromNode);
+                System.out.println("Message from node " + service + ": " + messageFromNode);
             }
         } catch (EOFException e) {
-            System.out.println("[INFO] Node " + nodeName + " closed the connection.");
+            System.out.println("[INFO] Node " + service + " closed the connection.");
         } catch(IOException e){
-            System.out.println("[WARN] Connection lost with node: " + nodeName);
+            System.out.println("[WARN] Connection lost with node: " + service);
         }finally {
         disconnect();
         }
-         */
     }
 }
 

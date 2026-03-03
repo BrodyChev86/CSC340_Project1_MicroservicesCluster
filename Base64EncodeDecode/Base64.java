@@ -169,7 +169,7 @@ public class Base64{
         base64.dataOutputStream.writeUTF("NODE_HELLO"); 
         base64.dataOutputStream.flush();
 
-        base64.dataOutputStream.writeUTF("Base64Node");
+        base64.dataOutputStream.writeUTF("Base64");
         base64.dataOutputStream.flush();
 
         Timer timer = new Timer(true); // daemon=true so it doesn't block JVM shutdown

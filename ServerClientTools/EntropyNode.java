@@ -8,13 +8,6 @@ import java.io.IOException;
 import java.net.*;
 import java.util.Scanner;
 
-import javax.swing.BoxLayout;
-import javax.swing.JButton;
-import javax.swing.JFileChooser;
-import javax.swing.JFrame;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.border.EmptyBorder;
 
 public class EntropyNode {
     private String service = "entropy";

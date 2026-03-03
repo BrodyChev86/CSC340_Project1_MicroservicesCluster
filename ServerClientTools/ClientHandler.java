@@ -87,7 +87,8 @@ public class ClientHandler implements Runnable {
                         broadcastMessageToSender("Decoded Text: " + decodedText);
                     }
                 } else if(messageFromClient.startsWith("entropy")) {
-
+                    Double entropy = calculateEntropy(messageFromClient.substring(8));
+                    broadcastMessageToSender("File Entropy: " + entropy);
                 }else {
                     broadcastMessageToSender("Invalid input. Please enter a valid option or follow the instructions for encoding/decoding."); //Sends an error message back to the client if their input does not match any valid commands, guiding them towards correct usage of the services
                 }
@@ -97,7 +98,24 @@ public class ClientHandler implements Runnable {
             }
         }
     }
-
+    public double calculateEntropy(String input) {
+        Double entropy = null;
+        System.out.println("Available service nodes: " + 
+    ServiceNodeHandler.getServiceNodeHandlers().size());
+        for (ServiceNodeHandler serviceNodeHandler : ServiceNodeHandler.getServiceNodeHandlers()) {
+        if ("entropy".equals(serviceNodeHandler.getService())) {
+            synchronized (serviceNodeHandler) {
+                try {
+                    entropy = Double.parseDouble(serviceNodeHandler.requestService(input)); //Sends a request to the service node handler for the entropy service, passing the input string and waiting for a response, which is then parsed as a double representing the calculated entropy
+                    return entropy;
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+        throw new RuntimeException("No entropy service node available"); //Throws an exception if no entropy service node is available to handle the request, indicating that the requested service cannot be performed at this time
+    }
     public static String getFileExtension(String fileName){
         int i = fileName.lastIndexOf('.'); //Finds the last occurrence of the '.' character in the file name, which is typically used to separate the file name from its extension
 

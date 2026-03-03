@@ -46,11 +46,11 @@ public class Server {
                     DataInputStream reader = new DataInputStream(socket.getInputStream());
                     String identity = reader.readUTF();
 
-                    if (identity != null && identity.equals("NODE_HELLO")) {
+                    if (identity != null && identity.equals("ENTROPY_HELLO")) {
                         String ip = socket.getInetAddress().getHostAddress();
                         nodeAddresses.add(ip); // Register node IP for reference
                         System.out.println("Node connected: " + ip);
-                        new Thread(new ServiceNodeHandler(socket)).start();
+                        new Thread(new ServiceNodeHandler(socket, "entropy")).start();
                     } else {
                         String ip = socket.getInetAddress().getHostAddress();
                         System.out.println("Client connected: " + ip);

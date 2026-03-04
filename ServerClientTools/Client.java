@@ -26,6 +26,11 @@ public class Client {
     private DataInputStream dataInputStream;
     private String username;
     private volatile boolean isUploading = false;
+    private StringBuilder fileBuffer = new StringBuilder();
+    private String pendingFileName = null;
+    private String pendingFileExtension = null;
+    private int expectedChunks = 0;
+    private int receivedChunks = 0;
     private java.util.List<File> filesToSend = new java.util.ArrayList<>();
 
     public Client(Socket socket, String username) {
@@ -72,12 +77,33 @@ public class Client {
             public void run() {
                 String msgFromServer;
 
+
                 while (socket.isConnected()) {
                     try {
                         msgFromServer = dataInputStream.readUTF();
                         if(msgFromServer.equals("FILE_UPLOAD")){
                             isUploading = true;
                             fileUpload(); // prompt user to pick files
+                            continue;
+                        }
+                        if (msgFromServer.startsWith("FILE_DOWNLOAD_START|")) {
+                            String[] parts = msgFromServer.split("\\|");
+                            pendingFileName = parts[1];
+                            pendingFileExtension = parts[2];
+                            expectedChunks = Integer.parseInt(parts[3]);
+                            receivedChunks = 0;
+                            fileBuffer = new StringBuilder();
+                            continue;
+                        }
+
+                        if (msgFromServer.startsWith("FILE_CHUNK|")) {
+                            fileBuffer.append(msgFromServer.substring("FILE_CHUNK|".length()));
+                            receivedChunks++;
+                            if (receivedChunks == expectedChunks) {
+                                byte[] fileContent = java.util.Base64.getDecoder().decode(fileBuffer.toString());
+                                fileDownload(pendingFileName, pendingFileExtension, fileContent);
+                                fileBuffer = new StringBuilder();
+                            }
                             continue;
                         }
                         System.out.println(msgFromServer);
@@ -180,6 +206,21 @@ public class Client {
         jFrame.add(jLabelFileName);
         jFrame.add(jPanelButtons);
         jFrame.setVisible(true);
+    }
+
+    private void fileDownload(String fileName, String fileExtension, byte[] fileContent) {
+        try {
+            String userHome = System.getProperty("user.home");
+            File downloadDir = new File(userHome, "Downloads");
+            if (!downloadDir.exists()) {
+                downloadDir.mkdirs();
+            }
+            File downloadedFile = new File(downloadDir, fileName);
+            java.nio.file.Files.write(downloadedFile.toPath(), fileContent);
+            System.out.println("File downloaded to: " + downloadedFile.getAbsolutePath());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
 

@@ -5,14 +5,14 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.ArrayList;
-
+import java.util.concurrent.LinkedBlockingQueue;
 
 import Base64EncodeDecode.Base64;
 
 public class ClientHandler implements Runnable {
 
     public static ArrayList<ClientHandler> clientHandlers = new ArrayList<>(); //A static list that holds references to all active client handlers, allowing the server to manage and communicate with multiple clients simultaneously
-    static ArrayList<FileHandler> fileHandlers = new ArrayList<>(); //A static list that holds FileHandler objects representing files available for entropy analysis, allowing the server to manage and access these files when clients request the File Entropy Analyzer service.
+    private ArrayList<FileHandler> fileHandlers = new ArrayList<>(); //A static list that holds FileHandler objects representing files available for entropy analysis, allowing the server to manage and access these files when clients request the File Entropy Analyzer service.
     private Socket socket; //Used to establish a connection between the server and a specific client
     private DataInputStream dataInputStream; //Used to read binary data from the client, such as files for entropy analysis
     private String clientUsername;
@@ -57,10 +57,15 @@ public class ClientHandler implements Runnable {
                 }else if(messageFromClient.equals("list")){
                     broadcastMessageToSender(serviceOptions);
                 } else if (messageFromClient.startsWith("BASE64")) {
-                    sendMessageToNode(messageFromClient.substring("BASE64".length()).trim()); 
+                    String command = messageFromClient.substring("BASE64".length()).trim();
+                    if (command.equals("ENCODE_FILE") || command.equals("DECODE_FILE")) {
+                        sendFileToNode(command); // file operation
+                    } else {
+                        sendMessageToNode(command); // text operation
+                    }
                 }
                 else if(messageFromClient.startsWith("ENTROPY")) {
-                    sendMessageToNode(messageFromClient);
+                    sendFileToNode(messageFromClient);
                 }else {
                     broadcastMessageToSender("Invalid input. Please enter a valid option or follow the instructions for encoding/decoding."); //Sends an error message back to the client if their input does not match any valid commands, guiding them towards correct usage of the services
                 }
@@ -71,20 +76,62 @@ public class ClientHandler implements Runnable {
         }
     }
     public void sendMessageToNode(String input) throws InterruptedException {
-        Double entropy = null;
         String base64 = null;
         System.out.println("Available service nodes: " + 
         ServiceNodeHandler.getServiceNodeHandlers().size());
         for (ServiceNodeHandler serviceNodeHandler : ServiceNodeHandler.getServiceNodeHandlers()) {
-            if ("ENTROPY".equals(serviceNodeHandler.getService())) {
-                entropy = Double.parseDouble(serviceNodeHandler.requestService(input)); //Sends a request to the service node handler for the entropy service, passing the input string and waiting for a response, which is then parsed as a double representing the calculated entropy
-                broadcastMessageToSender("File Entropy: " + entropy);
-                return;
-            }
             if ("BASE64".equals(serviceNodeHandler.getService())) {
                 base64 = serviceNodeHandler.requestService(input); //Sends a request to the service node handler for the entropy service, passing the input string and waiting for a response, which is then parsed as a double representing the calculated entropy
                 broadcastMessageToSender("Result: " + base64); //Sends the result of the Base64 operation back to the client
                 return;
+            }
+        }
+        throw new RuntimeException("[ERROR] NODE NOT FOUND"); //Throws an exception if no entropy service node is available to handle the request, indicating that the requested service cannot be performed at this time
+    }
+
+    public void sendFileToNode(String messageFromClient) throws InterruptedException {
+        for (ServiceNodeHandler serviceNodeHandler : ServiceNodeHandler.getServiceNodeHandlers()) {
+            if ("ENTROPY".equals(serviceNodeHandler.getService())) {
+                if (currentFile == null){
+                    broadcastMessageToSender("No file uploaded. Please upload a file to analyze its entropy.");
+                    return;
+                }else{
+                    String fileAsString = java.util.Base64.getEncoder().encodeToString(currentFile.getData());
+                    String payload = "ENTROPY|" + currentFile.getFileName() + "|" + fileAsString;
+                    String response = serviceNodeHandler.requestService(payload);
+                    broadcastMessageToSender("File Entropy: " + response);
+                    return;
+                }
+            }
+            if("BASE64".equals(serviceNodeHandler.getService())){
+                if(currentFile == null){
+                    broadcastMessageToSender("No file uploaded. Please upload a file to encode/decode.");
+                    return;
+                }else{
+                    String fileExtension = currentFile.getFileExtension();
+                    String fileName = currentFile.getFileName();
+                    String fileAsString = java.util.Base64.getEncoder().encodeToString(currentFile.getData());
+                    String payload = ""+ messageFromClient + "|" + currentFile.getFileName() + "|" + fileAsString + "|" + fileExtension;
+                    String responseStr = serviceNodeHandler.requestServiceFile(payload);
+
+                    // handle encode vs decode differently
+                    if (messageFromClient.equals("ENCODE_FILE")) {
+                        // responseStr itself is a Base64 representation of the original bytes
+                        // convert to bytes so fileDownload will wrap it again for client
+                        byte[] fileBytes = responseStr.getBytes();
+                        // change extension to text to avoid confusion
+                        String outExt = "txt";
+                        String outName = fileName + "_encoded";
+                        fileDownload(outName, outExt, fileBytes);
+                    } else {
+                        // DECODE_FILE: node returned Base64 of the decoded bytes; decode it now
+                        byte[] fileBytes = java.util.Base64.getDecoder().decode(responseStr);
+                        fileDownload(fileName, fileExtension, fileBytes);
+                    }
+
+                    broadcastMessageToSender("FILE HAS BEEN RETURNED");
+                    return;
+                }
             }
         }
         throw new RuntimeException("[ERROR] NODE NOT FOUND"); //Throws an exception if no entropy service node is available to handle the request, indicating that the requested service cannot be performed at this time
@@ -97,6 +144,29 @@ public class ClientHandler implements Runnable {
             return fileName = fileName.substring(i + 1); //Extracts the substring of the file name that comes after the last '.', which is the file extension
         }else{
             return "No extension found"; //Returns a message indicating that no file extension was found if there is no '.' character in the file name
+        }
+    }
+
+    public void fileDownload(String fileName, String fileExtension, byte[] fileContent) {
+        try {
+            String fileAsString = java.util.Base64.getEncoder().encodeToString(fileContent);
+            int chunkSize = 30000; // safe size under the 65535 UTF limit
+            int totalChunks = (int) Math.ceil((double) fileAsString.length() / chunkSize);
+
+            // Tell the client how many chunks to expect
+            dataOutputStream.writeUTF("FILE_DOWNLOAD_START|" + fileName + "|" + fileExtension + "|" + totalChunks);
+            dataOutputStream.flush();
+
+            // Send each chunk
+            for (int i = 0; i < totalChunks; i++) {
+                int start = i * chunkSize;
+                int end = Math.min(start + chunkSize, fileAsString.length());
+                String chunk = fileAsString.substring(start, end);
+                dataOutputStream.writeUTF("FILE_CHUNK|" + chunk);
+                dataOutputStream.flush();
+            }
+        } catch (IOException e) {
+            closeEverything(socket, dataInputStream, dataOutputStream);
         }
     }
 

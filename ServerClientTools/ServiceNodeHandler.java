@@ -61,6 +61,16 @@ public class ServiceNodeHandler implements Runnable{
         requestQueue.put(input);
         return responseQueue.take(); // Wait for the service node to process the request and put a response in the queue
     }
+
+    /**
+     * Sends the given request string to the node and waits for its reply.
+     * The reply is returned verbatim; callers decide whether to treat it as
+     * raw bytes or a Base64 string.
+     */
+    public String requestServiceFile(String input) throws InterruptedException {
+        requestQueue.put(input);
+        return responseQueue.take(); // return the raw response string from node
+    }
     public String getService() {
         return this.service;
     }
@@ -170,14 +180,53 @@ public class ServiceNodeHandler implements Runnable{
         return " ";
     }
 
-    @Override
+    /**
+     * Write a potentially large request string to the node using the same
+     * chunking protocol the node uses for responses.  This avoids the 64‑KB
+     * limitation of DataOutputStream.writeUTF.
+     */
+    private void sendRequest(String request) throws IOException {
+        int chunkSize = 60000;
+        if (request.length() <= chunkSize) {
+            dataOutputStream.writeUTF(request);
+            dataOutputStream.flush();
+        } else {
+            int total = (request.length() + chunkSize - 1) / chunkSize;
+            dataOutputStream.writeUTF("FILE_REQUEST_START|" + total);
+            dataOutputStream.flush();
+            for (int i = 0; i < total; i++) {
+                int start = i * chunkSize;
+                int end = Math.min(start + chunkSize, request.length());
+                dataOutputStream.writeUTF("FILE_REQUEST_CHUNK|" + request.substring(start, end));
+                dataOutputStream.flush();
+            }
+        }
+    }
+
     public void run() {
         try {
             while (socket.isConnected()) {
                 String request = requestQueue.take();  // waits for work
-                dataOutputStream.writeUTF(request);
-                dataOutputStream.flush();
+                sendRequest(request);
+
                 String response = dataInputStream.readUTF();
+                // if the node is sending back a large file, it will chunk it
+                if (response.startsWith("FILE_RESPONSE_START|")) {
+                    String[] parts = response.split("\\|");
+                    int chunks = Integer.parseInt(parts[1]);
+                    StringBuilder sb = new StringBuilder();
+                    for (int i = 0; i < chunks; i++) {
+                        String chunkMsg = dataInputStream.readUTF();
+                        if (chunkMsg.startsWith("FILE_RESPONSE_CHUNK|")) {
+                            sb.append(chunkMsg.substring("FILE_RESPONSE_CHUNK|".length()));
+                        } else {
+                            // unexpected message, still append raw
+                            sb.append(chunkMsg);
+                        }
+                    }
+                    response = sb.toString();
+                }
+
                 responseQueue.put(response);           // hand result back
             }
         }catch (EOFException e) {

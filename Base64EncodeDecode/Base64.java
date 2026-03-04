@@ -56,6 +56,7 @@ public class Base64{
         Base64.fileData = fileData;
     }
 
+
     public BufferedImage decodeToImage(byte[] decodedBytes) {
         try {
             return ImageIO.read(new ByteArrayInputStream(decodedBytes));
@@ -85,6 +86,33 @@ public class Base64{
         }
     }
 
+    /**
+     * Send the supplied raw bytes back to the server but avoid writeUTF size limits.
+     * The data is first Base64 encoded (the protocol expected by the server) and
+     * then split into manageable chunks (< 64K) which are transmitted as a sequence
+     * of UTF messages.  The server-side handler understands the start/ chunk markers
+     * and will reassemble the full string before returning it to the client.
+     */
+    private void sendFile(byte[] fileBytes) {
+        try {
+            String encoded = java.util.Base64.getEncoder().encodeToString(fileBytes);
+            int chunkSize = 60000; // safe under the 65535 byte limit of writeUTF
+            int totalChunks = (encoded.length() + chunkSize - 1) / chunkSize;
+            // first send header telling the server how many pieces to expect
+            dataOutputStream.writeUTF("FILE_RESPONSE_START|" + totalChunks);
+            dataOutputStream.flush();
+            for (int i = 0; i < totalChunks; i++) {
+                int start = i * chunkSize;
+                int end = Math.min(start + chunkSize, encoded.length());
+                String chunk = encoded.substring(start, end);
+                dataOutputStream.writeUTF("FILE_RESPONSE_CHUNK|" + chunk);
+                dataOutputStream.flush();
+            }
+        } catch (IOException e) {
+            closeEverything(socket, dataInputStream, dataOutputStream);
+        }
+    }
+
     public void sendErrorMessage() {
         try {
             dataOutputStream.writeUTF("[ERROR] Invalid input for Base64 encoding/decoding. Please provide valid text or file data.");
@@ -108,15 +136,50 @@ public class Base64{
                 while (socket.isConnected()) {
                     try {
                         String msgFromServer = dataInputStream.readUTF();
+                        // reassemble chunked request if server split a large payload
+                        if (msgFromServer.startsWith("FILE_REQUEST_START|")) {
+                            String[] hdr = msgFromServer.split("\\|");
+                            int chunks = Integer.parseInt(hdr[1]);
+                            StringBuilder sb = new StringBuilder();
+                            for (int i = 0; i < chunks; i++) {
+                                String chunkMsg = dataInputStream.readUTF();
+                                if (chunkMsg.startsWith("FILE_REQUEST_CHUNK|")) {
+                                    sb.append(chunkMsg.substring("FILE_REQUEST_CHUNK|".length()));
+                                } else {
+                                    sb.append(chunkMsg);
+                                }
+                            }
+                            msgFromServer = sb.toString();
+                        }
                         if(msgFromServer.startsWith("ENCODE_TEXT")){
                             String textToEncode = msgFromServer.substring("ENCODE_TEXT".length()).trim();
                             sendEncodedText(textToEncode.getBytes());
                         } else if(msgFromServer.startsWith("DECODE_TEXT")){
                             String textToDecode = msgFromServer.substring("DECODE_TEXT".length()).trim();
                             sendDecodedText(textToDecode);
+                        } else if(msgFromServer.startsWith("ENCODE_FILE")){
+                            // payload: ENCODE_FILE|name|base64-of-original-bytes|ext
+                            String[] parts = msgFromServer.split("\\|");
+                            // decode once to get original file bytes
+                            byte[] fileBytes = java.util.Base64.getDecoder().decode(parts[2]);
+                            // encode again and send back; server will treat the returned string as the encoded text
+                            sendFile(fileBytes);
+                        } else if(msgFromServer.startsWith("DECODE_FILE")){
+                            // payload: DECODE_FILE|name|base64-of-base64-text|ext
+                            String[] parts = msgFromServer.split("\\|");
+                            byte[] intermediate = java.util.Base64.getDecoder().decode(parts[2]);
+                            byte[] fileBytes;
+                            try {
+                                String ascii = new String(intermediate);
+                                fileBytes = java.util.Base64.getDecoder().decode(ascii);
+                            } catch (IllegalArgumentException e) {
+                                // not valid base64, just return what we got
+                                fileBytes = intermediate;
+                            }
+                            sendFile(fileBytes);
                         } else {
                             sendErrorMessage();
-                        }
+                        } 
                     } catch (IOException e) {
                         closeEverything(socket, dataInputStream, dataOutputStream);
                     }

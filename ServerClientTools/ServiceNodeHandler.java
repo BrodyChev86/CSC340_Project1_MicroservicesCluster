@@ -22,8 +22,8 @@ public class ServiceNodeHandler implements Runnable{
     private DataOutputStream dataOutputStream;
     private DatagramSocket datagramSocket;
     private byte[] outgoingData = new byte[1024];
-    //private String nodeName;
     private Instant lastHeartbeat;
+    private String nodeId;
     private static final ConcurrentHashMap<String, ServiceNodeHandler> connectedNodes = new ConcurrentHashMap<>();
 
     public ServiceNodeHandler(Socket socket, DatagramSocket datagramSocket) {
@@ -33,6 +33,7 @@ public class ServiceNodeHandler implements Runnable{
         this.dataInputStream = new DataInputStream(socket.getInputStream());
         this.dataOutputStream = new DataOutputStream(socket.getOutputStream());
         service = dataInputStream.readUTF().trim(); // First message from node should be its service type
+        nodeId = dataInputStream.readUTF().trim(); // Second message is a unique node ID (can be random or based on IP/port)
         this.lastHeartbeat = Instant.now();
         serviceNodeHandlers.add(this);
 
@@ -60,6 +61,10 @@ public class ServiceNodeHandler implements Runnable{
     public String requestService(String input) throws InterruptedException {
         requestQueue.put(input);
         return responseQueue.take(); // Wait for the service node to process the request and put a response in the queue
+    }
+
+    public String getNodeId() {
+        return nodeId;
     }
 
     /**
@@ -95,7 +100,7 @@ public class ServiceNodeHandler implements Runnable{
 
     public void removeServiceNodeHandler() {
         serviceNodeHandlers.remove(this);
-        connectedNodes.remove(service);
+        connectedNodes.remove(service, this);
         // broadcastMessage(service + " node has disconnected");
         //System.out.println("A service has disconnected!");
     }
@@ -152,10 +157,24 @@ public class ServiceNodeHandler implements Runnable{
     }
 
     public void disconnect() {
-        connectedNodes.remove(service);
+        removeServiceNodeHandler();
         System.out.println("[INFO] Node disconnected: " + service);
+        closeSocket();
+    }
+
+    public void timeoutDisconnect() {
+        removeServiceNodeHandler();
+        System.out.println("[TIMEOUT] Node timed out and disconnected: " + service);
+        closeSocket();
+    }
+
+    private void closeSocket() {
         try {
-            socket.close();
+            if (socket != null) {
+                socket.close(); // Closes the socket connection between the server and the client, releasing any
+                                // resources associated with it and preventing further communication with the
+                                // client
+            }
         } catch (IOException e) {
             e.printStackTrace();
         }

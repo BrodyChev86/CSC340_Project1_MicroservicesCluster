@@ -88,6 +88,7 @@ public class EntropyNode {
                                                        // with the server and other clients connected to it
         DatagramSocket datagramSocket = new DatagramSocket();
         EntropyNode entropyNode = new EntropyNode(socket, datagramSocket);
+        String nodeId = java.util.UUID.randomUUID().toString();
 
         entropyNode.dataOutputStream.writeUTF("NODE_HELLO"); // Sends an initial message to the server to identify
                                                                 // itself as a node, allowing the server to manage the
@@ -99,12 +100,16 @@ public class EntropyNode {
                                                             // to route relevant client requests to this node
         entropyNode.dataOutputStream.flush();
 
+        entropyNode.dataOutputStream.writeUTF(nodeId); // Sends a unique node ID to the server, allowing the server to
+                                                        // track and manage this node's status and heartbeats effectively
+        entropyNode.dataOutputStream.flush();
+
         Timer timer = new Timer(true); // daemon=true so it doesn't block JVM shutdown
         timer.scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {
                 try {
-                    entropyNode.sendHeartbeat("NODE_ALIVE", InetAddress.getByName("localhost"), 1235);
+                    entropyNode.sendHeartbeat("NODE_ALIVE|" + nodeId, InetAddress.getByName("localhost"), 1235);
                     System.out.println("Sent heartbeat to server: NODE_ALIVE");
                 } catch (IOException e) {
                     e.printStackTrace();

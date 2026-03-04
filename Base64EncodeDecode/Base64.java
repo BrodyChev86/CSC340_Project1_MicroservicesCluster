@@ -212,6 +212,7 @@ public class Base64{
         Socket socket = new Socket("localhost", 1234);
         DatagramSocket datagramSocket = new DatagramSocket();
         Base64 base64 = new Base64(socket, datagramSocket, "Base64Node");
+        String nodeId = java.util.UUID.randomUUID().toString();
         
         base64.dataOutputStream.writeUTF("NODE_HELLO"); 
         base64.dataOutputStream.flush();
@@ -219,12 +220,15 @@ public class Base64{
         base64.dataOutputStream.writeUTF("BASE64");
         base64.dataOutputStream.flush();
 
+        base64.dataOutputStream.writeUTF(nodeId);
+        base64.dataOutputStream.flush();
+
         Timer timer = new Timer(true); // daemon=true so it doesn't block JVM shutdown
         timer.scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {
                 try {
-                    base64.sendHeartbeat("NODE_ALIVE", InetAddress.getByName("localhost"), 1235);
+                    base64.sendHeartbeat("NODE_ALIVE|" + nodeId, InetAddress.getByName("localhost"), 1235);
                     System.out.println("Sent heartbeat to server: NODE_ALIVE");
                 } catch (IOException e) {
                     e.printStackTrace();

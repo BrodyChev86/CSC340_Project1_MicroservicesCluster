@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import FileEntropyAnalyzer.EntropyAnalyzer;
 
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.net.*;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -13,6 +14,8 @@ import java.time.Instant;
 public class ServiceNodeHandler implements Runnable{
     private Socket socket;
     private static ArrayList<ServiceNodeHandler> serviceNodeHandlers = new ArrayList<>();
+    private final LinkedBlockingQueue<String> requestQueue = new LinkedBlockingQueue<>();
+    private final LinkedBlockingQueue<String> responseQueue = new LinkedBlockingQueue<>();
     private DataInputStream dataInputStream; // Used to read binary data from the client, such as files for entropy
                                              // analysis
     private String service;
@@ -54,16 +57,10 @@ public class ServiceNodeHandler implements Runnable{
     //The client handler sends a request to the service node handler
     //when done this way we don't have to worry about the distinction between different types of service nodes, 
     //we just send a request to the node and it processes it and sends back a response
-    public synchronized String requestService(String input) throws IOException {
-    try {
-            dataOutputStream.writeUTF(input);
-            dataOutputStream.flush();
-            return dataInputStream.readUTF(); // blocks until response
-        } catch (IOException e) {
-            closeEverything(socket, dataInputStream, dataOutputStream);
-            throw e;
-        }
-}
+    public String requestService(String input) throws InterruptedException {
+        requestQueue.put(input);
+        return responseQueue.take(); // Wait for the service node to process the request and put a response in the queue
+    }
     public String getService() {
         return this.service;
     }
@@ -88,6 +85,7 @@ public class ServiceNodeHandler implements Runnable{
 
     public void removeServiceNodeHandler() {
         serviceNodeHandlers.remove(this);
+        connectedNodes.remove(service);
         // broadcastMessage(service + " node has disconnected");
         //System.out.println("A service has disconnected!");
     }
@@ -175,17 +173,19 @@ public class ServiceNodeHandler implements Runnable{
     @Override
     public void run() {
         try {
-            String messageFromNode;
             while (socket.isConnected()) {
-                messageFromNode = dataInputStream.readUTF().trim();
-                System.out.println("Message from node " + service + ": " + messageFromNode);
+                String request = requestQueue.take();  // waits for work
+                dataOutputStream.writeUTF(request);
+                dataOutputStream.flush();
+                String response = dataInputStream.readUTF();
+                responseQueue.put(response);           // hand result back
             }
-        } catch (EOFException e) {
+        }catch (EOFException e) {
             System.out.println("[INFO] Node " + service + " closed the connection.");
-        } catch(IOException e){
+        }catch (InterruptedException e) {
+            System.out.println("[ERROR] ServiceNodeHandler interrupted: " + e.getMessage());
+        }catch(IOException e){
             System.out.println("[WARN] Connection lost with node: " + service);
-        }finally {
-        disconnect();
         }
     }
 }

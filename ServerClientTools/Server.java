@@ -36,7 +36,7 @@ public class Server {
             public void run() {
                 Instant now = Instant.now();
                 ServiceNodeHandler.getAllNodes().values().removeIf(node -> {
-                    if (Duration.between(node.getLastHeartbeat(), now).getSeconds() > 30) {
+                    if (Duration.between(node.getLastHeartbeat(), now).getSeconds() > 10) {
                         System.out.println("[TIMEOUT] Removing stale node: " + node.getService());
                         node.disconnect(); // Close its socket
                         return true;
@@ -84,7 +84,7 @@ public class Server {
                     } else {
                         InetAddress ip = socket.getInetAddress();
                         System.out.println("Client connected: " + ip);
-                        new Thread(new ClientHandler(socket)).start();
+                        new Thread(new ClientHandler(socket, identity)).start();
                     }
                 } catch (IOException e) {
                     e.printStackTrace();
@@ -96,21 +96,22 @@ public class Server {
         tcpThread.start();
     }
 
+
     private void updateNodeStatus(String hostAddress, String messageFromNode) {
         if (messageFromNode.trim().equals("NODE_ALIVE")) {
-        // Iterate through connected nodes to find the one matching this IP
-        for (ServiceNodeHandler handler : ServiceNodeHandler.getAllNodes().values()) {
-            InetAddress tcpAddress = handler.getSocket().getInetAddress();
-            // compare using equals for robustness
-            if (tcpAddress != null && tcpAddress.getHostAddress().equals(hostAddress)) {
-                handler.refreshHeartbeat();
-                System.out.println("[DEBUG] Heartbeat refreshed for node: " + hostAddress);
-                return;
+            // Iterate through connected nodes to find the one matching this IP
+            for (ServiceNodeHandler handler : ServiceNodeHandler.getAllNodes().values()) {
+                InetAddress tcpAddress = handler.getSocket().getInetAddress();
+                // compare using equals for robustness
+                if (tcpAddress != null && tcpAddress.getHostAddress().equals(hostAddress)) {
+                    handler.refreshHeartbeat();
+                    System.out.println("[DEBUG] Heartbeat refreshed for node: " + hostAddress);
+                    return;
+                }
             }
+            // nothing matched
+            //System.out.println("[WARN] No handler found for heartbeat from " + hostAddress + " (registered nodes: "+ ServiceNodeHandler.getAllNodes().keySet() + ")");
         }
-        // nothing matched
-        //System.out.println("[WARN] No handler found for heartbeat from " + hostAddress + " (registered nodes: "+ ServiceNodeHandler.getAllNodes().keySet() + ")");
-    }
     }
 
     public void receiveUDPMessages(DatagramPacket packet) {

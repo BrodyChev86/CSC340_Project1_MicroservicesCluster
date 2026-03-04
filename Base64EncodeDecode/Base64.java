@@ -67,15 +67,9 @@ public class Base64{
 
     public void sendEncodedText(byte[] data) {
         try {
-            dataOutputStream.writeUTF(username);
+            String messageToSend = encode(data);
+            dataOutputStream.writeUTF(messageToSend);
             dataOutputStream.flush();
-
-
-            while (socket.isConnected()) {
-                String messageToSend = encode(data);
-                dataOutputStream.writeUTF(username + ": " + messageToSend);
-                dataOutputStream.flush();
-            }
         } catch (IOException e) {
             closeEverything(socket, dataInputStream, dataOutputStream);
         }
@@ -83,15 +77,9 @@ public class Base64{
 
     public void sendDecodedText(String text) {
         try {
-            dataOutputStream.writeUTF(username);
+            String messageToSend = decode(text);
+            dataOutputStream.writeUTF(messageToSend);
             dataOutputStream.flush();
-
-
-            while (socket.isConnected()) {
-                String messageToSend = decode(text);
-                dataOutputStream.writeUTF(username + ": " + messageToSend);
-                dataOutputStream.flush();
-            }
         } catch (IOException e) {
             closeEverything(socket, dataInputStream, dataOutputStream);
         }
@@ -99,9 +87,7 @@ public class Base64{
 
     public void sendErrorMessage() {
         try {
-            dataOutputStream.writeUTF(username);
-            dataOutputStream.flush();
-            dataOutputStream.writeUTF("ERROR: " + "Invalid input for Base64 encoding/decoding. Please provide valid text or file data.");
+            dataOutputStream.writeUTF("[ERROR] Invalid input for Base64 encoding/decoding. Please provide valid text or file data.");
             dataOutputStream.flush();
         } catch (IOException e) {
             closeEverything(socket, dataInputStream, dataOutputStream);
@@ -119,11 +105,9 @@ public class Base64{
         new Thread(new Runnable(){
             @Override
             public void run() {
-                String msgFromServer;
-
                 while (socket.isConnected()) {
                     try {
-                        msgFromServer = dataInputStream.readUTF();
+                        String msgFromServer = dataInputStream.readUTF();
                         if(msgFromServer.startsWith("ENCODE_TEXT")){
                             String textToEncode = msgFromServer.substring("ENCODE_TEXT".length()).trim();
                             sendEncodedText(textToEncode.getBytes());
@@ -169,7 +153,7 @@ public class Base64{
         base64.dataOutputStream.writeUTF("NODE_HELLO"); 
         base64.dataOutputStream.flush();
 
-        base64.dataOutputStream.writeUTF("Base64");
+        base64.dataOutputStream.writeUTF("BASE64");
         base64.dataOutputStream.flush();
 
         Timer timer = new Timer(true); // daemon=true so it doesn't block JVM shutdown

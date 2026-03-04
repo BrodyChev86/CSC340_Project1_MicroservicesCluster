@@ -7,20 +7,25 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.*;
 import java.util.Scanner;
+import java.util.Timer;
+import java.util.TimerTask;
+
+import FileEntropyAnalyzer.EntropyAnalyzer;
 
 
 public class EntropyNode {
-    private String service = "entropy";
     private Socket socket;
+    private DatagramSocket datagramSocket;
+    private byte[] outgoingData = new byte[1024];
     private DataOutputStream dataOutputStream;
     private DataInputStream dataInputStream;
 
-    public EntropyNode(Socket socket, String service) {
+    public EntropyNode(Socket socket, DatagramSocket datagramSocket) {
         try {
             this.socket = socket;
+            this.datagramSocket = datagramSocket;
             this.dataOutputStream = new DataOutputStream(socket.getOutputStream());
             this.dataInputStream = new DataInputStream(socket.getInputStream());
-            this.service = service;
         } catch (IOException e) {
             closeEverything(socket, dataInputStream, dataOutputStream);
         }
@@ -32,10 +37,9 @@ public class EntropyNode {
                 try {
                     String msgFromServer = dataInputStream.readUTF();
 
-                    // Calculate entropy
+                    // Need to add a way to send files for entropy analysis, but for now we can just calculate the entropy of text messages
                     double entropy = FileEntropyAnalyzer.EntropyAnalyzer
                             .calculateEntropy(msgFromServer);
-
                     // Send result back to server
                     dataOutputStream.writeUTF(String.valueOf(entropy));
                     dataOutputStream.flush();
@@ -47,6 +51,12 @@ public class EntropyNode {
             }
         }).start();
 
+    }
+
+    public void sendHeartbeat(String message, InetAddress address, int port) throws IOException {
+        outgoingData = message.getBytes();
+        DatagramPacket sendPacket = new DatagramPacket(outgoingData, outgoingData.length, address, port);
+        datagramSocket.send(sendPacket);
     }
 
     /**
@@ -73,24 +83,39 @@ public class EntropyNode {
     }
 
     public static void main(String[] args) throws IOException {
-        Scanner scanner = new Scanner(System.in);
-        System.out.print("Enter your username for the server: ");
-        String service = "entropy";
         Socket socket = new Socket("localhost", 1234); // Creates a socket that connects to the server running on
                                                        // localhost at port 1234, allowing the client to communicate
                                                        // with the server and other clients connected to it
-        EntropyNode entropyNode = new EntropyNode(socket, service);
+        DatagramSocket datagramSocket = new DatagramSocket();
+        EntropyNode entropyNode = new EntropyNode(socket, datagramSocket);
 
         entropyNode.dataOutputStream.writeUTF("NODE_HELLO"); // Sends an initial message to the server to identify
                                                                 // itself as a node, allowing the server to manage the
                                                                 // connection appropriately
         entropyNode.dataOutputStream.flush();
 
+        entropyNode.dataOutputStream.writeUTF("ENTROPY"); // Sends a message to the server to specify that this node
+                                                            // provides entropy calculation services, allowing the server
+                                                            // to route relevant client requests to this node
+        entropyNode.dataOutputStream.flush();
+
+        Timer timer = new Timer(true); // daemon=true so it doesn't block JVM shutdown
+        timer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                try {
+                    entropyNode.sendHeartbeat("NODE_ALIVE", InetAddress.getByName("localhost"), 1235);
+                    System.out.println("Sent heartbeat to server: NODE_ALIVE");
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }, 0, 5000);
+
         entropyNode.listenForMessage(); // Starts a thread to listen for incoming messages from the server, enabling the
         // client to receive messages from other clients in real-time
         // entropyNode.sendMessage(); // Starts sending messages to the server, allowing
         // the client to participate in
         // the group chat by sending messages to other clients through the server
-        scanner.close();
     }
 }

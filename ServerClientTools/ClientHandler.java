@@ -16,18 +16,18 @@ public class ClientHandler implements Runnable {
     private Socket socket; //Used to establish a connection between the server and a specific client
     private DataInputStream dataInputStream; //Used to read binary data from the client, such as files for entropy analysis
     private String clientUsername;
-    private final String serviceOptions = "To Encode a file: encode file\nTo Decode a file: decode file\nTo Encode text: encode <text>\nTo Decode text: decode <text>\nTo upload a file please enter the 'upload' command \nType 'list' to see these options again at any time!"; //A string that contains the options for the services offered by the server, which is sent to clients to guide them in choosing a service
+    private final String serviceOptions = "To Encode a file: BASE64 ENCODE_FILE\nTo Decode a file: BASE64 DECODE_FILE\nTo Encode text: BASE64 ENCODE_TEXT <text>\nTo Decode text: BASE64 DECODE_TEXT <text>\nTo analyze Entropy: ENTROPY <file>\nTo upload a file please enter the 'upload' command \nType 'list' to see these options again at any time!"; //A string that contains the options for the services offered by the server, which is sent to clients to guide them in choosing a service
     private DataOutputStream dataOutputStream;
     private int fileId = 0; //A counter used to assign unique IDs to uploaded files, allowing the server to manage and reference these files
     private FileHandler currentFile = null;
     private volatile boolean isUploading = false; //A flag used to indicate whether a file upload is currently in progress, allowing the server to manage the file upload process and prevent conflicts with other operations
 
-    public ClientHandler(Socket socket){
+    public ClientHandler(Socket socket, String clientUsername) {
         try {
             this.socket = socket;
             this.dataInputStream = new DataInputStream(socket.getInputStream()); //Initializes the data input stream for reading binary data from the client
             this.dataOutputStream = new DataOutputStream(socket.getOutputStream()); //Initializes the data output stream for sending binary data back to the client
-            this.clientUsername = dataInputStream.readUTF(); //Reads the client's username from the input stream, allowing the server to identify and manage the client based on their username
+            this.clientUsername = clientUsername;
             clientHandlers.add(this); //Adds the current client handler instance to the static list of client handlers, enabling the server to keep track of all connected clients and facilitate communication between them
             broadcastMessageToSender(serviceOptions); //Sends a message to the client that just connected asking them to choose a service
         } catch (IOException e) {
@@ -54,41 +54,13 @@ public class ClientHandler implements Runnable {
                 }else if(messageFromClient.equals("exit")){
                     removeClientHandler(); 
                     break; //If the client disconects the loop will break and the thread will end 
-                }else if(messageFromClient.equals("1")){ //Checks if the client wants to use the Base64 Encode/Decode service
-                    broadcastMessageToSender("You have selected the File Entopy Analyzer service! Please upload the file you would like to analyze using the 'upload' command"); //Sends a message to the client with instructions on how to use the File Entropy Analyzer service
-                }else if(messageFromClient.equals("2")){
-                    broadcastMessageToSender("You have selected the Base64 Encode/Decode service! Please enter the text you would like to encode or decode in the following format: \nTo Encode a file: encode file\nTo Decode a file: decode file\nTo Encode text: encode <text>\nTo Decode text: decode <text>\nTo upload a file please enter the 'upload' command"); //Sends a message to the client with instructions on how to use the Base64 Encode/Decode service
                 }else if(messageFromClient.equals("list")){
                     broadcastMessageToSender(serviceOptions);
-                } else if (messageFromClient.startsWith("encode ")){ //Checks if the client wants to encode a message
-                    if(messageFromClient.equals("encode file")){
-                        if(currentFile == null){
-                            broadcastMessageToSender("No file uploaded. Please upload a file first by typing 'upload'.");
-                        } else {
-                            String encodedText = Base64.encode(currentFile.getData()); 
-                            broadcastMessageToSender("Encoded File (" + currentFile.getFileName() + "): " + encodedText);
-                        }
-                    } else {
-                        String textToEncode = messageFromClient.substring(7);
-                        String encodedText = Base64.encode(textToEncode.getBytes());
-                        broadcastMessageToSender("Encoded Text: " + encodedText);
-                    }
-                } else if (messageFromClient.startsWith("decode ")){ //Checks if the client wants to decode a message
-                   if(messageFromClient.equals("decode file")){
-                        if(currentFile == null){
-                            broadcastMessageToSender("No file uploaded. Please upload a file first by typing 'upload'.");
-                        } else {
-                            String decodedText = Base64.decode(new String(currentFile.getData()));
-                            broadcastMessageToSender("Decoded File (" + currentFile.getFileName() + "): " + decodedText);
-                        }
-                    } else {
-                        String textToDecode = messageFromClient.substring(7);
-                        String decodedText = Base64.decode(textToDecode);
-                        broadcastMessageToSender("Decoded Text: " + decodedText);
-                    }
-                } else if(messageFromClient.startsWith("entropy")) {
-                    Double entropy = calculateEntropy(messageFromClient.substring(8));
-                    broadcastMessageToSender("File Entropy: " + entropy);
+                } else if (messageFromClient.startsWith("BASE64")) {
+                    sendMessageToNode(messageFromClient.substring("BASE64".length()).trim()); 
+                }
+                else if(messageFromClient.startsWith("ENTROPY")) {
+                    sendMessageToNode(messageFromClient);
                 }else {
                     broadcastMessageToSender("Invalid input. Please enter a valid option or follow the instructions for encoding/decoding."); //Sends an error message back to the client if their input does not match any valid commands, guiding them towards correct usage of the services
                 }
@@ -98,24 +70,26 @@ public class ClientHandler implements Runnable {
             }
         }
     }
-    public double calculateEntropy(String input) {
+    public void sendMessageToNode(String input) throws InterruptedException {
         Double entropy = null;
+        String base64 = null;
         System.out.println("Available service nodes: " + 
-    ServiceNodeHandler.getServiceNodeHandlers().size());
+        ServiceNodeHandler.getServiceNodeHandlers().size());
         for (ServiceNodeHandler serviceNodeHandler : ServiceNodeHandler.getServiceNodeHandlers()) {
-        if ("entropy".equals(serviceNodeHandler.getService())) {
-            synchronized (serviceNodeHandler) {
-                try {
-                    entropy = Double.parseDouble(serviceNodeHandler.requestService(input)); //Sends a request to the service node handler for the entropy service, passing the input string and waiting for a response, which is then parsed as a double representing the calculated entropy
-                    return entropy;
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
+            if ("ENTROPY".equals(serviceNodeHandler.getService())) {
+                entropy = Double.parseDouble(serviceNodeHandler.requestService(input)); //Sends a request to the service node handler for the entropy service, passing the input string and waiting for a response, which is then parsed as a double representing the calculated entropy
+                broadcastMessageToSender("File Entropy: " + entropy);
+                return;
+            }
+            if ("BASE64".equals(serviceNodeHandler.getService())) {
+                base64 = serviceNodeHandler.requestService(input); //Sends a request to the service node handler for the entropy service, passing the input string and waiting for a response, which is then parsed as a double representing the calculated entropy
+                broadcastMessageToSender("Result: " + base64); //Sends the result of the Base64 operation back to the client
+                return;
             }
         }
+        throw new RuntimeException("[ERROR] NODE NOT FOUND"); //Throws an exception if no entropy service node is available to handle the request, indicating that the requested service cannot be performed at this time
     }
-        throw new RuntimeException("No entropy service node available"); //Throws an exception if no entropy service node is available to handle the request, indicating that the requested service cannot be performed at this time
-    }
+
     public static String getFileExtension(String fileName){
         int i = fileName.lastIndexOf('.'); //Finds the last occurrence of the '.' character in the file name, which is typically used to separate the file name from its extension
 
@@ -175,6 +149,7 @@ public class ClientHandler implements Runnable {
             }
         }
     }
+
 
     //Sends a message only to the sender, allowing the server to communicate directly with the client that sent a message without broadcasting it to all clients
     public void broadcastMessageToSender(String messageToSend){

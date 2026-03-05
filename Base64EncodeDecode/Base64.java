@@ -95,7 +95,7 @@ public class Base64{
      */
     private void sendFile(byte[] fileBytes) {
         try {
-            String encoded = java.util.Base64.getEncoder().encodeToString(fileBytes);
+            String encoded = encode(fileBytes);
             int chunkSize = 60000; // safe under the 65535 byte limit of writeUTF
             int totalChunks = (encoded.length() + chunkSize - 1) / chunkSize;
             // first send header telling the server how many pieces to expect
@@ -161,17 +161,17 @@ public class Base64{
                             // payload: ENCODE_FILE|name|base64-of-original-bytes|ext
                             String[] parts = msgFromServer.split("\\|");
                             // decode once to get original file bytes
-                            byte[] fileBytes = java.util.Base64.getDecoder().decode(parts[2]);
+                            byte[] fileBytes = decodeToBytes(parts[2]);
                             // encode again and send back; server will treat the returned string as the encoded text
                             sendFile(fileBytes);
                         } else if(msgFromServer.startsWith("DECODE_FILE")){
                             // payload: DECODE_FILE|name|base64-of-base64-text|ext
                             String[] parts = msgFromServer.split("\\|");
-                            byte[] intermediate = java.util.Base64.getDecoder().decode(parts[2]);
+                            byte[] intermediate = decodeToBytes(parts[2]);
                             byte[] fileBytes;
                             try {
                                 String ascii = new String(intermediate);
-                                fileBytes = java.util.Base64.getDecoder().decode(ascii);
+                                fileBytes = decodeToBytes(ascii);
                             } catch (IllegalArgumentException e) {
                                 // not valid base64, just return what we got
                                 fileBytes = intermediate;

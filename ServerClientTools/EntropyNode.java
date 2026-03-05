@@ -36,10 +36,12 @@ public class EntropyNode {
             while (socket.isConnected()) {
                 try {
                     String msgFromServer = dataInputStream.readUTF();
-
+                    String[] parts = msgFromServer.split("\\|");
+                    // decode once to get original file bytes
+                    byte[] fileBytes = java.util.Base64.getDecoder().decode(parts[2]);
                     // Need to add a way to send files for entropy analysis, but for now we can just calculate the entropy of text messages
                     double entropy = FileEntropyAnalyzer.EntropyAnalyzer
-                            .calculateEntropy(msgFromServer);
+                            .calculateEntropy(fileBytes);
                     // Send result back to server
                     dataOutputStream.writeUTF(String.valueOf(entropy));
                     dataOutputStream.flush();
@@ -116,7 +118,7 @@ public class EntropyNode {
                 }
             }
         }, 0, 5000);
-
+        
         entropyNode.listenForMessage(); // Starts a thread to listen for incoming messages from the server, enabling the
         // client to receive messages from other clients in real-time
         // entropyNode.sendMessage(); // Starts sending messages to the server, allowing

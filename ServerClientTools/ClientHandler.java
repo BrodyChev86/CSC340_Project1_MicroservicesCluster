@@ -16,7 +16,7 @@ public class ClientHandler implements Runnable {
     private Socket socket; //Used to establish a connection between the server and a specific client
     private DataInputStream dataInputStream; //Used to read binary data from the client, such as files for entropy analysis
     private String clientUsername;
-    private final String serviceOptions = "To Encode a file: BASE64 ENCODE_FILE\nTo Decode a file: BASE64 DECODE_FILE\nTo Encode text: BASE64 ENCODE_TEXT <text>\nTo Decode text: BASE64 DECODE_TEXT <text>\nTo analyze Entropy: ENTROPY <file>\nTo view connected nodes: NODE_LIST\nTo upload a file please enter the 'upload' command \nType 'list' to see these options again at any time!"; //A string that contains the options for the services offered by the server, which is sent to clients to guide them in choosing a service
+    private final String serviceOptions = "To Encode a file: BASE64 ENCODE_FILE\nTo Decode a file: BASE64 DECODE_FILE\nTo Encode text: BASE64 ENCODE_TEXT <text>\nTo Decode text: BASE64 DECODE_TEXT <text>\nTo analyze Entropy: ENTROPY <file>\nTo analyze a CSV file: CSV\nTo view connected nodes: NODE_LIST\nTo upload a file please enter the 'upload' command \nType 'list' to see these options again at any time!";
     private DataOutputStream dataOutputStream;
     private int fileId = 0; //A counter used to assign unique IDs to uploaded files, allowing the server to manage and reference these files
     private FileHandler currentFile = null;
@@ -66,6 +66,8 @@ public class ClientHandler implements Runnable {
                 }
                 else if(messageFromClient.startsWith("ENTROPY")) {
                     sendFileToNode(messageFromClient);
+                }else if (messageFromClient.startsWith("CSV")) {
+                    sendToCSVNode();
                 }else if(messageFromClient.equals("NODE_LIST")){
                     StringBuilder nodeList = new StringBuilder("Connected Nodes:\n");
                     for (ServiceNodeHandler serviceNodeHandler : ServiceNodeHandler.getServiceNodeHandlers()) {
@@ -97,51 +99,69 @@ public class ClientHandler implements Runnable {
     }
 
     public void sendFileToNode(String messageFromClient) throws InterruptedException {
-        for (ServiceNodeHandler serviceNodeHandler : ServiceNodeHandler.getServiceNodeHandlers()) {
-            if ("ENTROPY".equals(serviceNodeHandler.getService())) {
-                if (currentFile == null){
-                    broadcastMessageToSender("No file uploaded. Please upload a file to analyze its entropy.");
-                    return;
-                }else{
-                    String fileAsString = java.util.Base64.getEncoder().encodeToString(currentFile.getData());
-                    String payload = "ENTROPY|" + currentFile.getFileName() + "|" + fileAsString;
-                    String response = serviceNodeHandler.requestService(payload);
-                    broadcastMessageToSender("File Entropy: " + response);
-                    return;
+            for (ServiceNodeHandler serviceNodeHandler : ServiceNodeHandler.getServiceNodeHandlers()) {
+                if ("ENTROPY".equals(serviceNodeHandler.getService())) {
+                    if (currentFile == null){
+                        broadcastMessageToSender("No file uploaded. Please upload a file to analyze its entropy.");
+                        return;
+                    }else{
+                        String fileAsString = java.util.Base64.getEncoder().encodeToString(currentFile.getData());
+                        String payload = "ENTROPY|" + currentFile.getFileName() + "|" + fileAsString;
+                        String response = serviceNodeHandler.requestService(payload);
+                        broadcastMessageToSender("File Entropy: " + response);
+                        return;
+                    }
+                }
+                if("BASE64".equals(serviceNodeHandler.getService())){
+                    if(currentFile == null){
+                        broadcastMessageToSender("No file uploaded. Please upload a file to encode/decode.");
+                        return;
+                    }else{
+                        String fileExtension = currentFile.getFileExtension();
+                        String fileName = currentFile.getFileName();
+                        String fileAsString = java.util.Base64.getEncoder().encodeToString(currentFile.getData());
+                        String payload = ""+ messageFromClient + "|" + currentFile.getFileName() + "|" + fileAsString + "|" + fileExtension;
+                        String responseStr = serviceNodeHandler.requestServiceFile(payload);
+
+                        // handle encode vs decode differently
+                        if (messageFromClient.equals("ENCODE_FILE")) {
+                            // responseStr itself is a Base64 representation of the original bytes
+                            // convert to bytes so fileDownload will wrap it again for client
+                            byte[] fileBytes = responseStr.getBytes();
+                            // change extension to text to avoid confusion
+                            String outExt = "txt";
+                            String outName = fileName + "_encoded";
+                            fileDownload(outName, outExt, fileBytes);
+                        } else {
+                            // DECODE_FILE: node returned Base64 of the decoded bytes; decode it now
+                            byte[] fileBytes = java.util.Base64.getDecoder().decode(responseStr);
+                            fileDownload(fileName, fileExtension, fileBytes);
+                        }
+
+                        broadcastMessageToSender("FILE HAS BEEN RETURNED");
+                        return;
+                    }
                 }
             }
-            if("BASE64".equals(serviceNodeHandler.getService())){
-                if(currentFile == null){
-                    broadcastMessageToSender("No file uploaded. Please upload a file to encode/decode.");
+            throw new RuntimeException("[ERROR] NODE NOT FOUND"); //Throws an exception if no entropy service node is available to handle the request, indicating that the requested service cannot be performed at this time
+        }
+
+    public void sendToCSVNode() throws InterruptedException {
+        for (ServiceNodeHandler serviceNodeHandler : ServiceNodeHandler.getServiceNodeHandlers()) {
+            if ("CSV_Stats".equals(serviceNodeHandler.getService())) {
+                if (currentFile == null) {
+                    broadcastMessageToSender("No file uploaded. Please upload a CSV file first.");
                     return;
-                }else{
-                    String fileExtension = currentFile.getFileExtension();
-                    String fileName = currentFile.getFileName();
+                } else {
                     String fileAsString = java.util.Base64.getEncoder().encodeToString(currentFile.getData());
-                    String payload = ""+ messageFromClient + "|" + currentFile.getFileName() + "|" + fileAsString + "|" + fileExtension;
-                    String responseStr = serviceNodeHandler.requestServiceFile(payload);
-
-                    // handle encode vs decode differently
-                    if (messageFromClient.equals("ENCODE_FILE")) {
-                        // responseStr itself is a Base64 representation of the original bytes
-                        // convert to bytes so fileDownload will wrap it again for client
-                        byte[] fileBytes = responseStr.getBytes();
-                        // change extension to text to avoid confusion
-                        String outExt = "txt";
-                        String outName = fileName + "_encoded";
-                        fileDownload(outName, outExt, fileBytes);
-                    } else {
-                        // DECODE_FILE: node returned Base64 of the decoded bytes; decode it now
-                        byte[] fileBytes = java.util.Base64.getDecoder().decode(responseStr);
-                        fileDownload(fileName, fileExtension, fileBytes);
-                    }
-
-                    broadcastMessageToSender("FILE HAS BEEN RETURNED");
+                    String payload = "CSV|" + currentFile.getFileName() + "|" + fileAsString;
+                    String response = serviceNodeHandler.requestService(payload);
+                    broadcastMessageToSender(response);
                     return;
                 }
             }
         }
-        throw new RuntimeException("[ERROR] NODE NOT FOUND"); //Throws an exception if no entropy service node is available to handle the request, indicating that the requested service cannot be performed at this time
+        broadcastMessageToSender("[ERROR] CSV service node not connected.");
     }
 
     public static String getFileExtension(String fileName){

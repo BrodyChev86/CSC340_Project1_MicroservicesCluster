@@ -6,8 +6,8 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 
 public class EntropyAnalyzer {
-    public static double calculateEntropy(String filePath) throws IOException {
-        byte[] fileData = Files.readAllBytes(Paths.get(filePath));
+    public static double calculateEntropy(byte[] fileData) throws IOException {
+        //byte[] fileData = Files.readAllBytes(Paths.get(filePath));
         if (fileData.length == 0){
             return 0.0;
         }

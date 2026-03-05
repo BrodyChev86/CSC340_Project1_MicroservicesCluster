@@ -5,9 +5,6 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.ArrayList;
-import java.util.concurrent.LinkedBlockingQueue;
-
-import Base64EncodeDecode.Base64;
 
 public class ClientHandler implements Runnable {
 

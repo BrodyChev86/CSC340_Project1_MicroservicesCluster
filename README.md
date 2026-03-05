@@ -79,6 +79,7 @@ The client application behaves like a chat program with several special commands
 - **BASE64 ENCODE_TEXT <text>** – Send raw text to a node and receive its base‑64 encoding.
 - **BASE64 DECODE_TEXT <text>** – Send base‑64 text to a node and receive the decoded string.
 - **ENTROPY <file>** – Sends the current file to an entropy service node; the file name is ignored, and the numeric entropy result is returned.
+- **CSV <file>** - Sends a .csv file to the node and prints the statistics to the consol.
 - **NODE_LIST** – Displays all connected service nodes and their offered services.
 - **list** – Redisplay this command menu.
 - **exit** – Disconnect the client from the server.

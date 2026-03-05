@@ -15,7 +15,7 @@ public class CSV_Reader {
     private static final int SERVER_PORT = 1234;
     private static final String SERVICE_NAME = "CSV_Stats";
     private static final String NODE_ID = UUID.randomUUID().toString();
-    private static final int HEARTBEAT_INTERVAL_MS = 30_000; // Heartbeat = 30 seconds
+    private static final int HEARTBEAT_INTERVAL_MS = 10_000; // Heartbeat = 10 seconds
     private static final int CHUNK_SIZE = 60_000; // 60,000 Characters Chunk Max
 
     // Socket I/O

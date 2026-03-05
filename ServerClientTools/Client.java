@@ -46,10 +46,6 @@ public class Client {
 
     public void sendMessage() {
         try {
-            dataOutputStream.writeUTF(username);
-            dataOutputStream.flush();
-
-
             Scanner scanner = new Scanner(System.in);
             while (socket.isConnected()) {
                 String messageToSend = scanner.nextLine();
@@ -249,7 +245,8 @@ public class Client {
                                                        // with the server and other clients connected to it
         Client client = new Client(socket, username);
 
-        client.dataOutputStream.writeUTF("CLIENT_HELLO"); // Sends an initial message to the server to identify itself as a client, allowing the server to manage the connection appropriately
+        // The username is sent as the initial message to identify the client
+        client.dataOutputStream.writeUTF(username);
         client.dataOutputStream.flush();
         
         client.listenForMessage(); // Starts a thread to listen for incoming messages from the server, enabling the

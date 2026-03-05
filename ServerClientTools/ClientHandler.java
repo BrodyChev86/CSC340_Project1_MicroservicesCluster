@@ -74,6 +74,9 @@ public class ClientHandler implements Runnable {
                         nodeList.append("- ").append(serviceNodeHandler.getService()).append("\n");
                     }
                     broadcastMessageToSender(nodeList.toString());
+                }else if(messageFromClient.equals("\n"))
+                {
+                    // ignore empty messages
                 }
                 else {
                     broadcastMessageToSender("Invalid input. Please enter a valid option or follow the instructions for encoding/decoding."); //Sends an error message back to the client if their input does not match any valid commands, guiding them towards correct usage of the services

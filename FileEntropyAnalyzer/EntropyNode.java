@@ -1,4 +1,4 @@
-package ServerClientTools;
+package FileEntropyAnalyzer;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -9,8 +9,6 @@ import java.net.*;
 import java.util.Scanner;
 import java.util.Timer;
 import java.util.TimerTask;
-
-import FileEntropyAnalyzer.EntropyAnalyzer;
 
 
 public class EntropyNode {

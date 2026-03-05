@@ -16,7 +16,7 @@ public class ClientHandler implements Runnable {
     private Socket socket; //Used to establish a connection between the server and a specific client
     private DataInputStream dataInputStream; //Used to read binary data from the client, such as files for entropy analysis
     private String clientUsername;
-    private final String serviceOptions = "To Encode a file: BASE64 ENCODE_FILE\nTo Decode a file: BASE64 DECODE_FILE\nTo Encode text: BASE64 ENCODE_TEXT <text>\nTo Decode text: BASE64 DECODE_TEXT <text>\nTo analyze Entropy: ENTROPY <file>\nTo analyze a CSV file: CSV <file>\nTo view connected nodes: NODE_LIST\nTo upload a file please enter the 'upload' command \nType 'list' to see these options again at any time!";
+    private final String serviceOptions = "To Encode a file: BASE64 ENCODE_FILE <file>\nTo Decode a file: BASE64 DECODE_FILE <file> <original file extension after the '.'>\nTo Encode text: BASE64 ENCODE_TEXT <text>\nTo Decode text: BASE64 DECODE_TEXT <text>\nTo analyze Entropy: ENTROPY <file>\nTo analyze a CSV file: CSV <file>\nTo view connected nodes: NODE_LIST\nTo upload a file please enter the 'upload' command \nType 'list' to see these options again at any time!";
     private DataOutputStream dataOutputStream;
     private int fileId = 0; //A counter used to assign unique IDs to uploaded files, allowing the server to manage and reference these files
     private FileHandler currentFile = null;
@@ -58,10 +58,24 @@ public class ClientHandler implements Runnable {
                     broadcastMessageToSender(serviceOptions);
                 } else if (messageFromClient.startsWith("BASE64")) {
                     String command = messageFromClient.substring("BASE64".length()).trim();
-                    if (command.equals("ENCODE_FILE") || command.equals("DECODE_FILE")) {
-                        sendFileToNode(command); // file operation
+                    if (command.startsWith("ENCODE_FILE")) {
+                        sendFileToNode("ENCODE_FILE");
+                    } else if (command.startsWith("DECODE_FILE")) {
+                        // expect: DECODE_FILE png  (or just DECODE_FILE to fall back)
+                        String[] parts = command.split("\\s+", 2);
+                        String targetExt; //If the user specified an extension, use it. Otherwise, fall back to the original file's extension or "bin" if we can't determine it, ensuring that the decoded file is saved with an appropriate extension for easy identification and use by the client after decoding
+                        if (parts.length > 1) {
+                            targetExt = parts[1].trim();
+                        } else {
+                            if (currentFile != null) {
+                                targetExt = currentFile.getFileExtension();
+                            } else {
+                                targetExt = "bin";
+                            }
+                        }
+                        sendFileToNode("DECODE_FILE|" + targetExt);
                     } else {
-                        sendMessageToNode(command); // text operation
+                        sendMessageToNode(command);
                     }
                 }
                 else if(messageFromClient.startsWith("ENTROPY")) {
@@ -123,22 +137,34 @@ public class ClientHandler implements Runnable {
                         String fileExtension = currentFile.getFileExtension();
                         String fileName = currentFile.getFileName();
                         String fileAsString = java.util.Base64.getEncoder().encodeToString(currentFile.getData());
-                        String payload = ""+ messageFromClient + "|" + currentFile.getFileName() + "|" + fileAsString + "|" + fileExtension;
-                        String responseStr = serviceNodeHandler.requestServiceFile(payload);
 
-                        // handle encode vs decode differently
                         if (messageFromClient.equals("ENCODE_FILE")) {
-                            // responseStr itself is a Base64 representation of the original bytes
-                            // convert to bytes so fileDownload will wrap it again for client
+                            String payload = "ENCODE_FILE|" + fileName + "|" + fileAsString + "|" + fileExtension;
+                            String responseStr = serviceNodeHandler.requestServiceFile(payload);
                             byte[] fileBytes = responseStr.getBytes();
-                            // change extension to text to avoid confusion
-                            String outExt = "txt";
-                            String outName = fileName + "_encoded";
-                            fileDownload(outName, outExt, fileBytes);
-                        } else {
-                            // DECODE_FILE: node returned Base64 of the decoded bytes; decode it now
+                            fileDownload(fileName + "_encoded", "txt", fileBytes);
+
+                        } else if (messageFromClient.startsWith("DECODE_FILE")) {
+                            // pull out the target extension the user specified
+                            String[] parts = messageFromClient.split("\\|", 2);
+                            String targetExt; //If the user specified an extension, use it. Otherwise, fall back to the original file's extension or "bin" if we can't determine it, ensuring that the decoded file is saved with an appropriate extension for easy identification and use by the client after decoding
+                            if (parts.length > 1) {
+                                targetExt = parts[1].trim();
+                            } else {
+                                targetExt = fileExtension;
+                            }
+                            String baseName; //If the original file name contains an extension, remove it to create a base name for the decoded file. If there is no extension, use the entire file name as the base name, ensuring that the decoded file is named appropriately based on the original file name and the presence of an extension for clarity and organization in the client's file system after downloading
+                            if (fileName.contains(".")) {
+                                baseName = fileName.substring(0, fileName.lastIndexOf('.'));
+                            } else {
+                                baseName = fileName;
+                            }
+                            String payload = "DECODE_FILE|" + fileName + "|" + fileAsString + "|" + fileExtension;
+                            String responseStr = serviceNodeHandler.requestServiceFile(payload);
                             byte[] fileBytes = java.util.Base64.getDecoder().decode(responseStr);
-                            fileDownload(fileName, fileExtension, fileBytes);
+
+                            // reconstruct with the user-specified extension
+                            fileDownload(baseName + "_decoded", targetExt, fileBytes);
                         }
 
                         broadcastMessageToSender("FILE HAS BEEN RETURNED");

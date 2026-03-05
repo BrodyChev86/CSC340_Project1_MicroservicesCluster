@@ -211,7 +211,13 @@ public class Client {
             if (!downloadDir.exists()) {
                 downloadDir.mkdirs();
             }
-            File downloadedFile = new File(downloadDir, fileName);
+            String fullFileName;
+            if (fileName.contains(".")) {
+                fullFileName = fileName; 
+            } else {
+                fullFileName = fileName + "." + fileExtension;
+            }
+            File downloadedFile = new File(downloadDir, fullFileName);
             java.nio.file.Files.write(downloadedFile.toPath(), fileContent);
             System.out.println("File downloaded to: " + downloadedFile.getAbsolutePath());
         } catch (IOException e) {

@@ -18,52 +18,138 @@ import javax.imageio.ImageIO;
 
 public class Base64{
 
-    private static byte[] fileData;
     private byte[] outgoingData = new byte[1024];
     private Socket socket;
     private DatagramSocket datagramSocket;
     private DataOutputStream dataOutputStream;
     private DataInputStream dataInputStream;
-    private String username;
-    private java.util.List<File> filesToSend = new java.util.ArrayList<>();
+    final static String base64Text = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    private static final int[] DECODE_TABLE = new int[256];
 
-    public Base64(Socket socket, DatagramSocket datagramSocket, String username) {
+    static {
+        // Default all to invalid
+        for (int i = 0; i < 256; i++) {
+            DECODE_TABLE[i] = -1;
+        }
+        // Map each Base64 character to its 6-bit value
+        for (int i = 0; i < base64Text.length(); i++) {
+            DECODE_TABLE[base64Text.charAt(i)] = i;
+        }
+        // Mark padding character
+        DECODE_TABLE['='] = -2;
+    }
+
+    public Base64(Socket socket, DatagramSocket datagramSocket) {
         try {
             this.socket = socket;
             this.datagramSocket = datagramSocket;
             this.dataOutputStream = new DataOutputStream(socket.getOutputStream());
             this.dataInputStream = new DataInputStream(socket.getInputStream());
-            this.username = username;
         } catch (IOException e) {
             closeEverything(socket, dataInputStream, dataOutputStream);
         }
     }
     
     public static String encode(byte[] data) {
-            return java.util.Base64.getEncoder().encodeToString(data);
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < data.length; i += 3) { // process 3 bytes at a time
+            int b1 = data[i] & 0xFF;
+            int b2 = (i + 1 < data.length) ? (data[i + 1] & 0xFF) : 0;
+            int b3 = (i + 2 < data.length) ? (data[i + 2] & 0xFF) : 0;
+
+            int combined = (b1 << 16) | (b2 << 8) | b3; // combine into 24 bits
+
+            // extract 6-bit segments and map to Base64 chars
+            sb.append(base64Text.charAt((combined >> 18) & 0x3F));
+            sb.append(base64Text.charAt((combined >> 12) & 0x3F));
+            sb.append((i + 1 < data.length) ? base64Text.charAt((combined >> 6) & 0x3F) : '=');
+            sb.append((i + 2 < data.length) ? base64Text.charAt(combined & 0x3F) : '=');
+        }
+        return sb.toString();
     }
 
     public static String decode(String input) {
-        byte[] decodedBytes = java.util.Base64.getDecoder().decode(input);
+        byte[] decodedBytes = decodeToBytes(input);
         return new String(decodedBytes);
     }
 
     public static byte[] decodeToBytes(String input) {
-        return java.util.Base64.getDecoder().decode(input);
-    }
-
-    public void setFileData(byte[] fileData) {
-        Base64.fileData = fileData;
-    }
-
-
-    public BufferedImage decodeToImage(byte[] decodedBytes) {
-        try {
-            return ImageIO.read(new ByteArrayInputStream(decodedBytes));
-        } catch (IOException e) {
-            e.printStackTrace();
-            return null;
+        if (input == null || input.isEmpty()) {
+            return new byte[0];
         }
+
+        // Strip whitespace (mirrors real-world tolerance)
+        input = input.replaceAll("\\s", "");
+
+        int length = input.length();
+        // Add missing padding to make length a multiple of 4
+        int mod = length % 4;
+        if (mod != 0) {
+            int paddingNeeded = 4 - mod;
+            for (int i = 0; i < paddingNeeded; i++) {
+                input += "=";
+            }
+            length = input.length();
+        }
+
+        // Count how many '=' padding characters are at the end (0, 1, or 2)
+        int padding = 0;
+        if (length > 0 && input.charAt(length - 1) == '=') padding++;
+        if (length > 1 && input.charAt(length - 2) == '=') padding++;
+        if (padding > 2) padding = 2;
+
+        // Each group of 4 Base64 chars decodes to 3 bytes, minus padding bytes
+        int outputLen = (length / 4) * 3 - padding;
+        byte[] output = new byte[outputLen];
+        int outIndex = 0;
+
+        // Process every 4-character block
+        for (int i = 0; i < length; i += 4) {
+            int b0 = getBase64Value(input, i);
+            int b1 = getBase64Value(input, i + 1);
+            int b2 = getBase64Value(input, i + 2);
+            int b3 = getBase64Value(input, i + 3);
+
+            // Combine 4x 6-bit values into 3 bytes:
+            //
+            //  [ b0: 6 bits ][ b1: 6 bits ][ b2: 6 bits ][ b3: 6 bits ]
+            //  = [ byte 1: 8 bits ][ byte 2: 8 bits ][ byte 3: 8 bits ]
+            //
+            // byte 1: all 6 bits of b0  +  top 2 bits of b1
+            // byte 2: bottom 4 bits of b1  +  top 4 bits of b2
+            // byte 3: bottom 2 bits of b2  +  all 6 bits of b3
+
+            int combined = (b0 << 18) | (b1 << 12) | (b2 << 6) | b3;
+
+            // Always write byte 1
+            if (outIndex < output.length)
+                output[outIndex++] = (byte) ((combined >> 16) & 0xFF);
+
+            // Only write byte 2 if not padding
+            if (b2 != -2 && outIndex < output.length) {
+                output[outIndex++] = (byte) ((combined >> 8) & 0xFF);
+            }
+
+            // Only write byte 3 if not padding
+            if (b3 != -2 && outIndex < output.length) {
+                output[outIndex++] = (byte) (combined & 0xFF);
+            }
+        }
+
+        return output;
+    }
+
+    private static int getBase64Value(String input, int i) {
+        char c = input.charAt(i);
+        int value = (c < 256) ? DECODE_TABLE[c] : -1;
+
+        if (value == -1) {
+            throw new IllegalArgumentException(
+                "Invalid Base64 character '" + c + "' at position " + i
+            );
+        }
+        // Return 0 for padding so bit-shifting still works cleanly
+        return (value == -2) ? 0 : value;
     }
 
     public void sendEncodedText(byte[] data) {
@@ -211,7 +297,7 @@ public class Base64{
      public static void main(String[] args) throws Exception {
         Socket socket = new Socket("localhost", 1234);
         DatagramSocket datagramSocket = new DatagramSocket();
-        Base64 base64 = new Base64(socket, datagramSocket, "Base64Node");
+        Base64 base64 = new Base64(socket, datagramSocket);
         String nodeId = java.util.UUID.randomUUID().toString();
         
         base64.dataOutputStream.writeUTF("NODE_HELLO"); 

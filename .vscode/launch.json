@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "Run TOPK (with classpath)",
+      "request": "launch",
+      "mainClass": "TOPK",
+      "classPaths": [
+        "${workspaceFolder}/Top-K Terms"
+      ],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

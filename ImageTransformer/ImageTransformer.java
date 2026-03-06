@@ -53,7 +53,7 @@ public class ImageTransformer {
         g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
         
         AffineTransform at = new AffineTransform();
-        at.translate((newWidth - w) / 2.0, (newHeight - h) / 2.0);
+        at.translate((newWidth - w) / 2.0, (newHeight - h) / 2.0); //help from claude for transformation calculations
         at.rotate(radians, w / 2.0, h / 2.0);
         
         g2d.setTransform(at);

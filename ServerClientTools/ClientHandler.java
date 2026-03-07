@@ -13,7 +13,7 @@ public class ClientHandler implements Runnable {
     private Socket socket; //Used to establish a connection between the server and a specific client
     private DataInputStream dataInputStream; //Used to read binary data from the client, such as files for entropy analysis
     private String clientUsername;
-    private final String serviceOptions = "To Encode a file: BASE64 ENCODE_FILE <file>\nTo Decode a file: BASE64 DECODE_FILE <file> <original file extension after the '.'>\nTo Encode text: BASE64 ENCODE_TEXT <text>\nTo Decode text: BASE64 DECODE_TEXT <text>\nTo analyze Entropy: ENTROPY <file>\nTo analyze a CSV file: CSV <file>\nTo view connected nodes: NODE_LIST\nTo upload a file please enter the 'upload' command \nType 'list' to see these options again at any time!";
+    private final String serviceOptions = "To Encode a file: BASE64 ENCODE_FILE <file>\nTo Decode a file: BASE64 DECODE_FILE <file> <original file extension after the '.'>\nTo Encode text: BASE64 ENCODE_TEXT <text>\nTo Decode text: BASE64 DECODE_TEXT <text>\nTo analyze Entropy: ENTROPY <file>\nTo analyze a CSV file: CSV <file>\nTo find top-k terms of a .txt file: TOPK FILE <file>\nTo find top-k terms of arbitrary text: TOPK <text>\nTo view connected nodes: NODE_LIST\nTo upload a file please enter the 'upload' command \nType 'list' to see these options again at any time!";
     private DataOutputStream dataOutputStream;
     private int fileId = 0; //A counter used to assign unique IDs to uploaded files, allowing the server to manage and reference these files
     private FileHandler currentFile = null;
@@ -79,6 +79,13 @@ public class ClientHandler implements Runnable {
                     sendFileToNode(messageFromClient);
                 }else if (messageFromClient.startsWith("CSV")) {
                     sendToCSVNode();
+                }else if (messageFromClient.startsWith("TOPK")) {
+                    String command = messageFromClient.substring("TOPK".length()).trim();
+                    if (command.toUpperCase().startsWith("FILE")) {
+                        sendFileToTopKNode(messageFromClient);
+                    } else {
+                        sendTextToTopKNode(command);
+                    }
                 }else if(messageFromClient.equals("NODE_LIST")){
                     StringBuilder nodeList = new StringBuilder("Connected Nodes:\n");
                     for (ServiceNodeHandler serviceNodeHandler : ServiceNodeHandler.getServiceNodeHandlers()) {
@@ -104,12 +111,12 @@ public class ClientHandler implements Runnable {
         ServiceNodeHandler.getServiceNodeHandlers().size());
         for (ServiceNodeHandler serviceNodeHandler : ServiceNodeHandler.getServiceNodeHandlers()) {
             if ("BASE64".equals(serviceNodeHandler.getService())) {
-                base64 = serviceNodeHandler.requestService(input); //Sends a request to the service node handler for the entropy service, passing the input string and waiting for a response, which is then parsed as a double representing the calculated entropy
+                base64 = serviceNodeHandler.requestService(input); 
                 broadcastMessageToSender("Result: " + base64); //Sends the result of the Base64 operation back to the client
                 return;
             }
         }
-        throw new RuntimeException("[ERROR] NODE NOT FOUND"); //Throws an exception if no entropy service node is available to handle the request, indicating that the requested service cannot be performed at this time
+        throw new RuntimeException("[ERROR] NODE NOT FOUND"); //Throws an exception if no service node is available to handle the request
     }
 
     public void sendFileToNode(String messageFromClient) throws InterruptedException {
@@ -190,6 +197,42 @@ public class ClientHandler implements Runnable {
         broadcastMessageToSender("[ERROR] CSV service node not connected.");
     }
 
+    // Sends the currently uploaded file to a TOPK node. optional k may follow the word FILE
+    public void sendFileToTopKNode(String messageFromClient) throws InterruptedException {
+        for (ServiceNodeHandler serviceNodeHandler : ServiceNodeHandler.getServiceNodeHandlers()) {
+            if ("TOPK".equals(serviceNodeHandler.getService())) {
+                if (currentFile == null) {
+                    broadcastMessageToSender("No file uploaded. Please upload a file before requesting top-k terms.");
+                    return;
+                } else {
+                    // ensure file extension is .txt
+                    String ext = currentFile.getFileExtension();
+                    if (!"txt".equalsIgnoreCase(ext)) {
+                        broadcastMessageToSender("TOPK service only supports .txt files. Please upload a .txt file.");
+                        return;
+                    }
+
+                    // parse optional k after the word FILE
+                    String[] tokens = messageFromClient.split("\\s+");
+                    int k = 3;
+                    if (tokens.length >= 3) {
+                        try {
+                            k = Integer.parseInt(tokens[2]);
+                        } catch (NumberFormatException nfe) {
+                            // ignore, keep default
+                        }
+                    }
+
+                    String fileAsString = java.util.Base64.getEncoder().encodeToString(currentFile.getData());
+                    String payload = "TOPK|" + k + "|" + fileAsString;
+                    String response = serviceNodeHandler.requestService(payload);
+                    broadcastMessageToSender(response);
+                    return;
+                }
+            }
+        }
+        broadcastMessageToSender("[ERROR] TOPK service node not connected.");
+    }
     public static String getFileExtension(String fileName){
         int i = fileName.lastIndexOf('.'); //Finds the last occurrence of the '.' character in the file name, which is typically used to separate the file name from its extension
 
@@ -198,6 +241,47 @@ public class ClientHandler implements Runnable {
         }else{
             return "No extension found"; //Returns a message indicating that no file extension was found if there is no '.' character in the file name
         }
+    }
+
+    // handle plain text TOPK requests (not files)
+    public void sendTextToTopKNode(String command) throws InterruptedException {
+        for (ServiceNodeHandler serviceNodeHandler : ServiceNodeHandler.getServiceNodeHandlers()) {
+            if ("TOPK".equals(serviceNodeHandler.getService())) {
+                if (command == null || command.isEmpty()) {
+                    broadcastMessageToSender("Please provide text to analyze or use 'TOPK [k] <text>'.");
+                    return;
+                }
+                // parse optional k at beginning
+                String[] parts = command.split("\\s+", 2);
+                int k = 3;
+                String text;
+                if (parts.length == 2) {
+                    // try interpret first token as k
+                    try {
+                        k = Integer.parseInt(parts[0]);
+                        text = parts[1];
+                    } catch (NumberFormatException nfe) {
+                        text = command;
+                    }
+                } else {
+                    // single token: could be a number or text
+                    try {
+                        k = Integer.parseInt(command);
+                        broadcastMessageToSender("Please specify text after the k value.");
+                        return;
+                    } catch (NumberFormatException nfe) {
+                        text = command;
+                    }
+                }
+                String base64 = java.util.Base64.getEncoder()
+                        .encodeToString(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                String payload = "TOPK|" + k + "|" + base64;
+                String response = serviceNodeHandler.requestService(payload);
+                broadcastMessageToSender(response);
+                return;
+            }
+        }
+        broadcastMessageToSender("[ERROR] TOPK service node not connected.");
     }
 
     public void fileDownload(String fileName, String fileExtension, byte[] fileContent) {

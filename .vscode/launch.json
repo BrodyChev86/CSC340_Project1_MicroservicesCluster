@@ -3,11 +3,32 @@
   "configurations": [
     {
       "type": "java",
+      "name": "TOPK",
+      "request": "launch",
+      "mainClass": "TOPKTerms.TOPK",
+      "projectName": "CSC340_Project1_MicroservicesCluster_75913d9a"
+    },
+    {
+      "type": "java",
+      "name": "Client",
+      "request": "launch",
+      "mainClass": "ServerClientTools.Client",
+      "projectName": "CSC340_Project1_MicroservicesCluster_75913d9a"
+    },
+    {
+      "type": "java",
+      "name": "Server",
+      "request": "launch",
+      "mainClass": "ServerClientTools.Server",
+      "projectName": "CSC340_Project1_MicroservicesCluster_75913d9a"
+    },
+    {
+      "type": "java",
       "name": "Run TOPK (with classpath)",
       "request": "launch",
-      "mainClass": "TOPK",
+      "mainClass": "TopKTerms.TOPK",
       "classPaths": [
-        "${workspaceFolder}/Top-K Terms"
+        "${workspaceFolder}"
       ],
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}"

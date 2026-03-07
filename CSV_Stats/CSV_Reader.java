@@ -113,6 +113,13 @@ public class CSV_Reader {
         try {
             // Split payload into parts (CSV|filename|base64data)
             String[] parts = request.split("\\|");
+
+            // ensure filename looks like a CSV
+            String filename = parts.length > 1 ? parts[1] : "";
+            if (!filename.toLowerCase().endsWith(".csv")) {
+                return "[ERROR] File must have a .csv extension.";
+            }
+
             byte[] fileBytes = java.util.Base64.getDecoder().decode(parts[2]);
 
             // Wraps decoded bytes so readCsv() can read them

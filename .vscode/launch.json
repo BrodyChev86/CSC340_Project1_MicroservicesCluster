@@ -3,6 +3,20 @@
   "configurations": [
     {
       "type": "java",
+      "name": "CSV_Reader",
+      "request": "launch",
+      "mainClass": "CSV_Stats.CSV_Reader",
+      "projectName": "CSC340_Project1_MicroservicesCluster_75913d9a"
+    },
+    {
+      "type": "java",
+      "name": "ImageTransformer",
+      "request": "launch",
+      "mainClass": "ImageTransformer",
+      "projectName": "CSC340_Project1_MicroservicesCluster_75913d9a"
+    },
+    {
+      "type": "java",
       "name": "TOPK",
       "request": "launch",
       "mainClass": "TOPKTerms.TOPK",

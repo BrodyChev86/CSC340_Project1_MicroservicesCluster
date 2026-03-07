@@ -13,7 +13,7 @@ public class ClientHandler implements Runnable {
     private Socket socket; //Used to establish a connection between the server and a specific client
     private DataInputStream dataInputStream; //Used to read binary data from the client, such as files for entropy analysis
     private String clientUsername;
-    private final String serviceOptions = "To Encode a file: BASE64 ENCODE_FILE <file>\nTo Decode a file: BASE64 DECODE_FILE <file> <original file extension after the '.'>\nTo Encode text: BASE64 ENCODE_TEXT <text>\nTo Decode text: BASE64 DECODE_TEXT <text>\nTo analyze Entropy: ENTROPY <file>\nTo analyze a CSV file: CSV <file>\nTo find top-k terms of a .txt file: TOPK FILE <file>\nTo find top-k terms of arbitrary text: TOPK <text>\nTo view connected nodes: NODE_LIST\nTo upload a file please enter the 'upload' command \nType 'list' to see these options again at any time!";
+    private final String serviceOptions = "To Encode a file: BASE64 ENCODE_FILE <file>\nTo Decode a file: BASE64 DECODE_FILE <file> <original file extension after the '.'>\nTo Encode text: BASE64 ENCODE_TEXT <text>\nTo Decode text: BASE64 DECODE_TEXT <text>\nTo analyze Entropy: ENTROPY <file>\nTo analyze a CSV file: CSV <file>\nTo find top-k terms of a .txt file: TOPK FILE <file>\nTo find top-k terms of arbitrary text: TOPK <text>\nImage transform commands (requires PNG or JPG image upload):\n  IMGT ROTATE <degrees>\n  IMGT RESIZE <width> <height>\n  IMGT TOGRAYSCALE\nTo view connected nodes: NODE_LIST\nTo upload a file please enter the 'upload' command \nType 'list' to see these options again at any time!";
     private DataOutputStream dataOutputStream;
     private int fileId = 0; //A counter used to assign unique IDs to uploaded files, allowing the server to manage and reference these files
     private FileHandler currentFile = null;
@@ -92,7 +92,10 @@ public class ClientHandler implements Runnable {
                         nodeList.append("- ").append(serviceNodeHandler.getService()).append("\n");
                     }
                     broadcastMessageToSender(nodeList.toString());
-                }else if(messageFromClient.equals("\n"))
+                } else if (messageFromClient.startsWith("IMGT")) {
+                    // image transformer commands
+                    sendFileToImageNode(messageFromClient);
+                } else if(messageFromClient.equals("\n"))
                 {
                     // ignore empty messages
                 }
@@ -186,6 +189,12 @@ public class ClientHandler implements Runnable {
                     broadcastMessageToSender("No file uploaded. Please upload a CSV file first.");
                     return;
                 } else {
+                    // ensure extension .csv
+                    String ext = currentFile.getFileExtension().toLowerCase();
+                    if (!ext.equals("csv")) {
+                        broadcastMessageToSender("Please upload a file with .csv extension for CSV service.");
+                        return;
+                    }
                     String fileAsString = java.util.Base64.getEncoder().encodeToString(currentFile.getData());
                     String payload = "CSV|" + currentFile.getFileName() + "|" + fileAsString;
                     String response = serviceNodeHandler.requestService(payload);
@@ -232,6 +241,81 @@ public class ClientHandler implements Runnable {
             }
         }
         broadcastMessageToSender("[ERROR] TOPK service node not connected.");
+    }
+
+    // send the current file to an ImageTransformer node
+    public void sendFileToImageNode(String messageFromClient) throws InterruptedException {
+        for (ServiceNodeHandler serviceNodeHandler : ServiceNodeHandler.getServiceNodeHandlers()) {
+            if ("IMGT".equals(serviceNodeHandler.getService())) {
+                if (currentFile == null) {
+                    broadcastMessageToSender("No file uploaded. Please upload an image to transform.");
+                    return;
+                }
+
+                // only allow png or jpg (jpeg treated as jpg)
+                String ext = currentFile.getFileExtension().toLowerCase();
+                if (!(ext.equals("jpg") || ext.equals("png"))) {
+                    broadcastMessageToSender("ImageTransformer only supports PNG and JPG files.");
+                    return;
+                }
+
+                String fileAsString = java.util.Base64.getEncoder().encodeToString(currentFile.getData());
+                String payload;
+                if (messageFromClient.startsWith("IMGT ROTATE")) {
+                    String[] parts = messageFromClient.split("\\s+");
+                    if (parts.length < 3) {
+                        broadcastMessageToSender("Usage: IMGT ROTATE <degrees>");
+                        return;
+                    }
+                    double degrees;
+                    try {
+                        degrees = Double.parseDouble(parts[2]);
+                    } catch (NumberFormatException nfe) {
+                        broadcastMessageToSender("Invalid degrees value.");
+                        return;
+                    }
+                    payload = "ROTATE|" + degrees + "|" + ext + "|" + fileAsString;
+                } else if (messageFromClient.startsWith("IMGT RESIZE")) {
+                    String[] parts = messageFromClient.split("\\s+");
+                    if (parts.length < 4) {
+                        broadcastMessageToSender("Usage: IMGT RESIZE <width> <height>");
+                        return;
+                    }
+                    int w, h;
+                    try {
+                        w = Integer.parseInt(parts[2]);
+                        h = Integer.parseInt(parts[3]);
+                    } catch (NumberFormatException nfe) {
+                        broadcastMessageToSender("Width and height must be integers.");
+                        return;
+                    }
+                    payload = "RESIZE|" + w + "|" + h + "|" + ext + "|" + fileAsString;
+                } else if (messageFromClient.equals("IMGT TOGRAYSCALE")) {
+                    payload = "TOGRAYSCALE|" + ext + "|" + fileAsString;
+                } else {
+                    broadcastMessageToSender("Unknown IMGT command.");
+                    return;
+                }
+
+                String response = serviceNodeHandler.requestServiceFile(payload);
+                byte[] fileBytes = java.util.Base64.getDecoder().decode(response);
+
+                // choose a descriptive name
+                String baseName = currentFile.getFileName();
+                int dot = baseName.lastIndexOf('.');
+                if (dot > 0) baseName = baseName.substring(0, dot);
+
+                String suffix;
+                if (messageFromClient.startsWith("IMGT ROTATE")) suffix = "_rot";
+                else if (messageFromClient.startsWith("IMGT RESIZE")) suffix = "_res";
+                else suffix = "_gray";
+
+                fileDownload(baseName + suffix, ext, fileBytes);
+                broadcastMessageToSender("Image transformation complete.");
+                return;
+            }
+        }
+        broadcastMessageToSender("[ERROR] ImageTransformer service node not connected.");
     }
     public static String getFileExtension(String fileName){
         int i = fileName.lastIndexOf('.'); //Finds the last occurrence of the '.' character in the file name, which is typically used to separate the file name from its extension

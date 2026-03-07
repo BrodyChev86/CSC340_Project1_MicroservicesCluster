@@ -8,7 +8,7 @@ This project consists of several Java components organized into folders:
 - `Base64EncodeDecode/` – contains the Base64 encoder and decoder service node as well as test files.
 - `CSV_Stats/` – contains the CSV Stats service node as well as test files.
 - `FileEntropyAnalyzer/` – contains the File Entropy Anaylizer node as well as test files.
-- `ImageTransformer/` – contains the Image Transformer service node.
+- `ImageTransformer/` – contains the Image Transformer service node. When run with `java ImageTransformer` it will register as the "IMGT" service and respond to IMGT commands from clients (e.g. rotate, resize, grayscale).
 
 Each component can be compiled and run independently, but the core microservices cluster functionality lives under `ServerClientTools`.
 
@@ -80,6 +80,9 @@ The client application behaves like a chat program with several special commands
 - **BASE64 DECODE_TEXT <text>** – Send base‑64 text to a node and receive the decoded string.
 - **ENTROPY <file>** – Sends the current file to an entropy service node; the file name is ignored, and the numeric entropy result is returned.
 - **CSV <file>** - Sends a .csv file to the node and prints the statistics to the consol.
+- **IMGT ROTATE <degrees>** – Transform the uploaded image by rotating it the specified number of degrees. Only PNG and JPG images are accepted. (Requires an image node.)
+- **IMGT RESIZE <width> <height>** – Change the dimensions of the uploaded image; input must be PNG or JPG.
+- **IMGT TOGRAYSCALE** – Convert the current image to grayscale; only PNG/JPG files are allowed.
 - **NODE_LIST** – Displays all connected service nodes and their offered services.
 - **list** – Redisplay this command menu.
 - **exit** – Disconnect the client from the server.

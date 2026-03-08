@@ -1,8 +1,6 @@
 import java.awt.*;
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
-import java.io.File;
-import java.io.IOException;
 import java.io.*;
 import java.net.*;
 import java.util.Timer;
@@ -13,6 +11,9 @@ public class ImageTransformer {
 
     private BufferedImage image;
     private String format;
+    private static final String SERVER_HOST = "localhost";
+    private static final int SERVER_PORT_TCP = 1234;
+    private static final int SERVER_PORT_UDP = 1235;
 
     public ImageTransformer(String inputPath) throws IOException {
         File inputFile = new File(inputPath);
@@ -92,12 +93,6 @@ public class ImageTransformer {
     public void save(String outputPath) throws IOException {
         ImageIO.write(this.image, format, new File(outputPath));
     }
-
-    /*
-     * Methods below turn this class into a networked service node so that it can
-     * participate in the microservices cluster.  The implementation mirrors the
-     * pattern used by Base64.java and EntropyNode.java.
-     */
 
     // networking helpers
     private Socket socket;
@@ -262,7 +257,7 @@ public class ImageTransformer {
 
         // otherwise behave like a cluster service node
         try {
-            Socket socket = new Socket("localhost", 1234);
+            Socket socket = new Socket(SERVER_HOST, SERVER_PORT_TCP);
             DatagramSocket datagramSocket = new DatagramSocket();
             ImageTransformer node = new ImageTransformer(); // use empty ctor
             node.initializeNetworking(socket, datagramSocket);
@@ -282,7 +277,7 @@ public class ImageTransformer {
                 @Override
                 public void run() {
                     try {
-                        node.sendHeartbeat("NODE_ALIVE|" + nodeId, InetAddress.getByName("localhost"), 1235);
+                        node.sendHeartbeat("NODE_ALIVE|" + nodeId, InetAddress.getByName(SERVER_HOST), SERVER_PORT_UDP);
                         System.out.println("Sent heartbeat to server: NODE_ALIVE");
                     } catch (IOException e) {
                         e.printStackTrace();

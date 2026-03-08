@@ -13,7 +13,31 @@ public class ClientHandler implements Runnable {
     private Socket socket; //Used to establish a connection between the server and a specific client
     private DataInputStream dataInputStream; //Used to read binary data from the client, such as files for entropy analysis
     private String clientUsername;
-    private final String serviceOptions = "To Encode a file: BASE64 ENCODE_FILE <file>\nTo Decode a file: BASE64 DECODE_FILE <file> <original file extension after the '.'>\nTo Encode text: BASE64 ENCODE_TEXT <text>\nTo Decode text: BASE64 DECODE_TEXT <text>\nTo analyze Entropy: ENTROPY <file>\nTo analyze a CSV file: CSV <file>\nTo find top-k terms of a .txt file: TOPK FILE <file>\nTo find top-k terms of arbitrary text: TOPK <text>\nImage transform commands (requires PNG or JPG image upload):\n  IMGT ROTATE <degrees>\n  IMGT RESIZE <width> <height>\n  IMGT TOGRAYSCALE\nTo view connected nodes: NODE_LIST\nTo upload a file please enter the 'upload' command \nType 'list' to see these options again at any time!";
+    private final String serviceOptions =
+        "Available commands:\n" +
+        "  upload                 * send a file to the server; upload a file before using services that require one.\n" +
+        "  list                   * display this help message again.\n" +
+        "  exit                   * disconnect from the server.\n\n" +
+        "BASE64 commands (text or uploaded file):\n" +
+        "  BASE64 ENCODE_FILE        * encode the currently uploaded file; result returned as base64 text.\n" +
+        "  BASE64 DECODE_FILE [ext]  * decode base64 data from uploaded file; optional extension for output (uses original ext or .bin if unspecified).\n" +
+        "  BASE64 ENCODE_TEXT <text> * send arbitrary text and receive its Base64 representation.\n" +
+        "  BASE64 DECODE_TEXT <text> * send Base64 text and receive decoded text.\n\n" +
+        "ENTROPY (file only):\n" +
+        "  ENTROPY               * compute entropy of the uploaded file.\n\n" +
+        "CSV statistics (file only):\n" +
+        "  CSV                   * analyze the uploaded CSV file (must have .csv extension).\n\n" +
+        "TOP-K terms:\n" +
+        "  TOPK FILE             * find top k terms in uploaded .txt file (default k=3).\n" +
+        "  TOPK  <text>          * find top k terms in provided text (default k=3).\n\n" +
+        "Image transformations (PNG/JPG, file upload required):\n" +
+        "  IMGT ROTATE <degrees>\n" +
+        "  IMGT RESIZE <width> <height>\n" +
+        "  IMGT TOGRAYSCALE\n\n" +
+        "Other:\n" +
+        "  NODE_LIST             * list connected service nodes.\n" +
+        "  upload                * start a file upload.\n" +
+        "  list                  * show this help text anytime.";
     private DataOutputStream dataOutputStream;
     private int fileId = 0; //A counter used to assign unique IDs to uploaded files, allowing the server to manage and reference these files
     private FileHandler currentFile = null;
@@ -34,12 +58,12 @@ public class ClientHandler implements Runnable {
 
 
     @Override
-    //Everything that is run in this method will be run in a sperate thread
+    //Everything that is run in this method will be run in a separate thread
     public void run() {
         String messageFromClient;
         while(socket.isConnected()){
             try {
-                messageFromClient = dataInputStream.readUTF().trim(); //Waits for a message from a client, needs to be done on a seperate thread to avoid blocking the main server thread and allowing the server to handle multiple clients concurrently
+                messageFromClient = dataInputStream.readUTF().trim(); //Waits for a message from a client, needs to be done on a separate thread to avoid blocking the main server thread and allowing the server to handle multiple clients concurrently
                 if (messageFromClient.contains(":")) {
                     messageFromClient = messageFromClient.substring(messageFromClient.indexOf(":") + 1).trim();
                 }
@@ -50,10 +74,14 @@ public class ClientHandler implements Runnable {
                     fileUpload(); //If the client sends a message indicating that they want to upload a file, call the fileUpload method to handle the file upload process
                 }else if(messageFromClient.equals("exit")){
                     removeClientHandler(); 
-                    break; //If the client disconects the loop will break and the thread will end 
+                    break; //If the client disconnects the loop will break and the thread will end 
                 }else if(messageFromClient.equals("list")){
                     broadcastMessageToSender(serviceOptions);
                 } else if (messageFromClient.startsWith("BASE64")) {
+                    if (!isNodeConnected("BASE64")) {
+                        broadcastMessageToSender("[ERROR] BASE64 service node not connected.");
+                        continue;
+                    }
                     String command = messageFromClient.substring("BASE64".length()).trim();
                     if (command.startsWith("ENCODE_FILE")) {
                         sendFileToNode("ENCODE_FILE");
@@ -76,10 +104,22 @@ public class ClientHandler implements Runnable {
                     }
                 }
                 else if(messageFromClient.startsWith("ENTROPY")) {
+                    if (!isNodeConnected("ENTROPY")) {
+                        broadcastMessageToSender("[ERROR] ENTROPY service node not connected.");
+                        continue;
+                    }
                     sendFileToNode(messageFromClient);
                 }else if (messageFromClient.startsWith("CSV")) {
+                    if (!isNodeConnected("CSV_Stats")) {
+                        broadcastMessageToSender("[ERROR] CSV_Stats service node not connected.");
+                        continue;
+                    }
                     sendToCSVNode();
                 }else if (messageFromClient.startsWith("TOPK")) {
+                    if (!isNodeConnected("TOPK")) {
+                        broadcastMessageToSender("[ERROR] TOPK service node not connected.");
+                        continue;
+                    }
                     String command = messageFromClient.substring("TOPK".length()).trim();
                     if (command.toUpperCase().startsWith("FILE")) {
                         sendFileToTopKNode(messageFromClient);
@@ -93,6 +133,10 @@ public class ClientHandler implements Runnable {
                     }
                     broadcastMessageToSender(nodeList.toString());
                 } else if (messageFromClient.startsWith("IMGT")) {
+                    if (!isNodeConnected("IMGT")) {
+                        broadcastMessageToSender("[ERROR] IMGT service node not connected.");
+                        continue;
+                    }
                     // image transformer commands
                     sendFileToImageNode(messageFromClient);
                 } else if(messageFromClient.equals("\n"))
@@ -104,11 +148,22 @@ public class ClientHandler implements Runnable {
                 }
             } catch (Exception e) {
                closeEverything(socket, dataInputStream, dataOutputStream); 
-               break; //If the client disconects the loop will break and the thread will end 
+               break; //If the client disconnects the loop will break and the thread will end 
             }
         }
     }
+    // simple wrapper so callers don't have to reference ServiceNodeHandler directly
+    private boolean isNodeConnected(String serviceName) {
+        return ServiceNodeHandler.isNodeConnected(serviceName);
+    }
+
     public void sendMessageToNode(String input) throws InterruptedException {
+        // sanity check: caller should have already verified but be defensive
+        if (!isNodeConnected("BASE64")) {
+            broadcastMessageToSender("[ERROR] BASE64 service node not connected.");
+            return;
+        }
+
         String base64 = null;
         System.out.println("Available service nodes: " + 
         ServiceNodeHandler.getServiceNodeHandlers().size());
@@ -119,10 +174,16 @@ public class ClientHandler implements Runnable {
                 return;
             }
         }
-        throw new RuntimeException("[ERROR] NODE NOT FOUND"); //Throws an exception if no service node is available to handle the request
+        // should never reach here if check passed
+        broadcastMessageToSender("[ERROR] NODE NOT FOUND");
     }
 
     public void sendFileToNode(String messageFromClient) throws InterruptedException {
+            // both BASE64 and ENTROPY use this helper, ensure at least one of them exists
+            if (!isNodeConnected("BASE64") && !isNodeConnected("ENTROPY")) {
+                broadcastMessageToSender("[ERROR] No appropriate service node (BASE64 or ENTROPY) is connected.");
+                return;
+            }
             for (ServiceNodeHandler serviceNodeHandler : ServiceNodeHandler.getServiceNodeHandlers()) {
                 if ("ENTROPY".equals(serviceNodeHandler.getService())) {
                     if (currentFile == null){
@@ -179,10 +240,14 @@ public class ClientHandler implements Runnable {
                     }
                 }
             }
-            throw new RuntimeException("[ERROR] NODE NOT FOUND"); //Throws an exception if no entropy service node is available to handle the request, indicating that the requested service cannot be performed at this time
+            broadcastMessageToSender("[ERROR] NODE NOT FOUND"); //Throws an exception if no entropy service node is available to handle the request, indicating that the requested service cannot be performed at this time
         }
 
     public void sendToCSVNode() throws InterruptedException {
+        if (!isNodeConnected("CSV_Stats")) {
+            broadcastMessageToSender("[ERROR] CSV_Stats service node not connected.");
+            return;
+        }
         for (ServiceNodeHandler serviceNodeHandler : ServiceNodeHandler.getServiceNodeHandlers()) {
             if ("CSV_Stats".equals(serviceNodeHandler.getService())) {
                 if (currentFile == null) {
@@ -203,11 +268,16 @@ public class ClientHandler implements Runnable {
                 }
             }
         }
+        // fallback though check above should have caught it
         broadcastMessageToSender("[ERROR] CSV service node not connected.");
     }
 
     // Sends the currently uploaded file to a TOPK node. optional k may follow the word FILE
     public void sendFileToTopKNode(String messageFromClient) throws InterruptedException {
+        if (!isNodeConnected("TOPK")) {
+            broadcastMessageToSender("[ERROR] TOPK service node not connected.");
+            return;
+        }
         for (ServiceNodeHandler serviceNodeHandler : ServiceNodeHandler.getServiceNodeHandlers()) {
             if ("TOPK".equals(serviceNodeHandler.getService())) {
                 if (currentFile == null) {
@@ -245,6 +315,10 @@ public class ClientHandler implements Runnable {
 
     // send the current file to an ImageTransformer node
     public void sendFileToImageNode(String messageFromClient) throws InterruptedException {
+        if (!isNodeConnected("IMGT")) {
+            broadcastMessageToSender("[ERROR] IMGT service node not connected.");
+            return;
+        }
         for (ServiceNodeHandler serviceNodeHandler : ServiceNodeHandler.getServiceNodeHandlers()) {
             if ("IMGT".equals(serviceNodeHandler.getService())) {
                 if (currentFile == null) {
@@ -329,6 +403,10 @@ public class ClientHandler implements Runnable {
 
     // handle plain text TOPK requests (not files)
     public void sendTextToTopKNode(String command) throws InterruptedException {
+        if (!isNodeConnected("TOPK")) {
+            broadcastMessageToSender("[ERROR] TOPK service node not connected.");
+            return;
+        }
         for (ServiceNodeHandler serviceNodeHandler : ServiceNodeHandler.getServiceNodeHandlers()) {
             if ("TOPK".equals(serviceNodeHandler.getService())) {
                 if (command == null || command.isEmpty()) {

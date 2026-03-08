@@ -13,6 +13,9 @@ public class EntropyNode {
     private byte[] outgoingData = new byte[1024];
     private DataOutputStream dataOutputStream;
     private DataInputStream dataInputStream;
+     private static final String SERVER_HOST = "localhost";
+    private static final int SERVER_PORT_TCP = 1234;
+    private static final int SERVER_PORT_UDP = 1235;
 
     public EntropyNode(Socket socket, DatagramSocket datagramSocket) {
         try {
@@ -30,10 +33,32 @@ public class EntropyNode {
             while (socket.isConnected()) {
                 try {
                     String msgFromServer = dataInputStream.readUTF();
+
+                    // reassemble if server split a large request into chunks
+                    if (msgFromServer.startsWith("FILE_REQUEST_START|")) {
+                        String[] hdr = msgFromServer.split("\\|");
+                        int chunks = Integer.parseInt(hdr[1]);
+                        StringBuilder sb = new StringBuilder();
+                        for (int i = 0; i < chunks; i++) {
+                            String chunkMsg = dataInputStream.readUTF();
+                            if (chunkMsg.startsWith("FILE_REQUEST_CHUNK|")) {
+                                sb.append(chunkMsg.substring("FILE_REQUEST_CHUNK|".length()));
+                            } else {
+                                sb.append(chunkMsg);
+                            }
+                        }
+                        msgFromServer = sb.toString();
+                    }
+
                     String[] parts = msgFromServer.split("\\|");
+                    if (parts.length < 3) {
+                        // malformed request; ignore or notify server
+                        System.err.println("[WARN] EntropyNode received bad payload: " + msgFromServer);
+                        continue;
+                    }
                     // decode once to get original file bytes
                     byte[] fileBytes = java.util.Base64.getDecoder().decode(parts[2]);
-                    // Need to add a way to send files for entropy analysis, but for now we can just calculate the entropy of text messages
+                    // calculate entropy
                     double entropy = FileEntropyAnalyzer.EntropyAnalyzer
                             .calculateEntropy(fileBytes);
                     // Send result back to server
@@ -79,7 +104,7 @@ public class EntropyNode {
     }
 
     public static void main(String[] args) throws IOException {
-        Socket socket = new Socket("localhost", 1234); // Creates a socket that connects to the server running on
+        Socket socket = new Socket(SERVER_HOST, SERVER_PORT_TCP); // Creates a socket that connects to the server running on
                                                        // localhost at port 1234, allowing the client to communicate
                                                        // with the server and other clients connected to it
         DatagramSocket datagramSocket = new DatagramSocket();
@@ -105,7 +130,7 @@ public class EntropyNode {
             @Override
             public void run() {
                 try {
-                    entropyNode.sendHeartbeat("NODE_ALIVE|" + nodeId, InetAddress.getByName("localhost"), 1235);
+                    entropyNode.sendHeartbeat("NODE_ALIVE|" + nodeId, InetAddress.getByName(SERVER_HOST), SERVER_PORT_UDP);
                     System.out.println("Sent heartbeat to server: NODE_ALIVE");
                 } catch (IOException e) {
                     e.printStackTrace();

@@ -29,7 +29,8 @@ public class TOPK {
     );
     // Config
     private static final String SERVER_HOST = "localhost";
-    private static final int SERVER_PORT = 1234;
+    private static final int SERVER_PORT_TCP = 1234;
+    private static final int SERVER_PORT_UDP = 1235;
     private static final String SERVICE_NAME = "TOPK";
     private static final String NODE_ID = UUID.randomUUID().toString();
     private static final int HEARTBEAT_INTERVAL_MS = 10_000; // Heartbeat = 10 seconds
@@ -57,7 +58,7 @@ public class TOPK {
 
     // Opens a TCP socket and sends service name and node ID
     private static void connect() throws IOException {
-        socket = new Socket(SERVER_HOST, SERVER_PORT);
+        socket = new Socket(SERVER_HOST, SERVER_PORT_TCP);
         dataInputStream = new DataInputStream(socket.getInputStream());
         dataOutputStream = new DataOutputStream(socket.getOutputStream());
         datagramSocket = new DatagramSocket();
@@ -80,7 +81,7 @@ public class TOPK {
                     String heartbeatMsg = "NODE_ALIVE|" + NODE_ID;
                     byte[] data = heartbeatMsg.getBytes();
                     DatagramPacket packet = new DatagramPacket(data, data.length,
-                    InetAddress.getByName(SERVER_HOST), 1235);
+                    InetAddress.getByName(SERVER_HOST), SERVER_PORT_UDP);
                     datagramSocket.send(packet);
                 } catch (IOException e) {
                     System.err.println("[WARN] Heartbeat failed, stopping.");

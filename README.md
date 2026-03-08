@@ -1,59 +1,59 @@
 # CSC340_Project1_MicroservicesCluster
-A distributed networking system that enables clients to submit computational tasks to a dynamic pool of worker nodes without prior knowledge of their locations. The system mirrors real-world service-oriented and microservice architectures by separating a control plane and a data plane.
+A distributed networking system that enables clients to submit computational tasks to a dynamic pool of worker nodes without prior knowledge of their locations. The system mirrors real‑world service‑oriented and microservice architectures by separating a control plane (the server) and a data plane (service nodes).
 
 ## Overview
-This project consists of several Java components organized into folders:
+This workspace is organized by service type. Each folder contains a node implementation that can register with the server and perform a specific operation on behalf of clients.
 
-- `ServerClientTools/` – contains the server, client, and routing logic for handling tasks and communicating with worker nodes.
-- `Base64EncodeDecode/` – contains the Base64 encoder and decoder service node as well as test files.
-- `CSV_Stats/` – contains the CSV Stats service node as well as test files.
-- `FileEntropyAnalyzer/` – contains the File Entropy Anaylizer node as well as test files.
-- `ImageTransformer/` – contains the Image Transformer service node. When run with `java ImageTransformer` it will register as the "IMGT" service and respond to IMGT commands from clients (e.g. rotate, resize, grayscale).
+- **ServerClientTools/** – the core cluster logic: the server, client, node handlers, and shared utilities.  You will normally start the server from here and run clients and service nodes that depend on it.
+- **Base64EncodeDecode/** – a node that encodes/decodes text or files in Base64.  Contains `Base64.java` and test resources.
+- **CSV_Stats/** – computes simple statistics on CSV files.  The node is implemented in `CSV_Reader.java`.
+- **FileEntropyAnalyzer/** – accepts any uploaded file and returns its Shannon entropy.  Implementation lives in `EntropyNode.java` along with supporting analyzer classes.
+- **ImageTransformer/** – performs basic image operations (rotate, resize, grayscale) on PNG/JPG data.  The class is `ImageTransformer.java` which can run either as a client utility or as a service node.
+- **TOPKTerms/** – finds the most frequent terms in text; the service node is `TOPK.java`.
 
-Each component can be compiled and run independently, but the core microservices cluster functionality lives under `ServerClientTools`.
+Each subproject can be compiled on its own; the cluster behaviour is driven by code under `ServerClientTools`.
 
 ## Getting Started
-To run the project, follow these simple steps:
+Use a terminal for each component you wish to run.  All commands assume you are in the workspace root unless noted otherwise.
 
-1. **Compile the Java code**
+1. **Compile everything** (or just individual packages):
    ```powershell
    cd ServerClientTools
    javac *.java
+   cd ..\Base64EncodeDecode
+   javac Base64.java
+   cd ..\CSV_Stats
+   javac CSV_Reader.java
+   # …repeat for other packages as needed
    ```
-   You can compile other sub-projects in the same way by changing into their directories.
+   Each service node has a `main` method; compilation is required before running.
 
-2. **Start the Server**
+2. **Start the server** (in `ServerClientTools`):
    ```powershell
+   cd ServerClientTools
    java Server
    ```
-   The server listens for incoming client requests and manages worker nodes.
+   The server listens on TCP port 1234 for clients and nodes, and UDP port 1235 for heartbeats.
 
-3. **Launch Clients or Worker Nodes**
-   In separate terminals, start the `Client` program to send tasks, or run a `ServiceNode` to act as a worker.
-
+3. **Launch clients or nodes** in separate terminals:
    ```powershell
+   # client that users interact with:
+   javac Client.java          # compile if not already
    java Client
-   # or
-   java Base64
-   # or
-   java CSV_Reader
-   # or
-   java ImageTransformer
-   # or
-   java EntropyNode
+
+   # worker/service nodes (choose one per terminal):
+   java Base64EncodeDecode.Base64
+   java CSV_Stats.CSV_Reader
+   java FileEntropyAnalyzer.EntropyNode
+   java ImageTransformer.ImageTransformer
+   java TOPKTerms.TOPK
    ```
+   Each node will print a hello message and send periodic UDP heartbeats to the server.
 
-   Workers register with the server and await tasks.
+4. **Upload files and issue commands** using the client.  See the “Client Commands” section below for valid syntax.
 
-## Configuration – Localhost IP Addresses
-All network connections are configured to communicate with `localhost` (127.0.0.1) by default. If you need to run the components on different machines, you must update the hardcoded IP addresses in the source files before compiling. Look for lines similar to:
-
-```java
-String serverHost = "127.0.0.1";  // change this to the server's IP
-InetAddress.getByName("localhost") //change this to the server's IP
-```
-
-and replace `127.0.0.1` or `localhost` with the appropriate host address or hostname for your environment. The common files to edit include:
+### Configuration – Localhost and Ports
+All network connections default to `localhost` (127.0.0.1) and ports 1234 (TCP) / 1235 (UDP).  To run components across machines, edit the hard‑coded `SERVER_HOST`, `SERVER_PORT_TCP`, and `SERVER_PORT_UDP` constants in the Java files listed below, then recompile:
 
 - `ServerClientTools/Client.java`
 - `ServerClientTools/Server.java`
@@ -62,29 +62,37 @@ and replace `127.0.0.1` or `localhost` with the appropriate host address or host
 - `CSV_Stats/CSV_Reader.java`
 - `Base64EncodeDecode/Base64.java`
 
-After editing the addresses, recompile the affected classes.
+Do **not** mix ports between clients and nodes; the server expects the defaults unless you adjust both sides.
 
-## Usage Tips
-- Ensure the server is running before starting clients or workers.
-- Use consistent port numbers if modifying them (default is visible in the source).
-- For testing, you can run all components on the same machine using different terminals.
+### Usage Tips
+- Always start the server first; clients or nodes started beforehand will fail to connect.
+- If you change source code, recompile the modified class before rerunning.
+- Testing on one machine is easiest; open multiple terminal windows and start each component there.
+- Logs printed to the console indicate connections, requests, and heartbeats.
 
-## Client Commands to the Server
+## Client Commands
+The client interface resembles a chat window.  Most messages are forwarded to the server which interprets them as commands; anything not recognized is broadcast as chat.
 
-The client application behaves like a chat program with several special commands that trigger server-side services.  Any unrecognized text is broadcast as a regular chat message.  Commands are case‑sensitive and trim the username prefix automatically.
+Commands are **case‑sensitive** and the username prefix (e.g. `user: `) is stripped automatically.
 
-- **upload** – Opens a file chooser. Selected files are sent to the server and stored as the "current" file.
-- **BASE64 ENCODE_FILE** – Ask a available Base64 node to encode the current file; result is downloaded as a text file.
-- **BASE64 DECODE_FILE** – Request a Base64 node to decode the current file; output is returned with the original name/extension.
-- **BASE64 ENCODE_TEXT <text>** – Send raw text to a node and receive its base‑64 encoding.
-- **BASE64 DECODE_TEXT <text>** – Send base‑64 text to a node and receive the decoded string.
-- **ENTROPY <file>** – Sends the current file to an entropy service node; the file name is ignored, and the numeric entropy result is returned.
-- **CSV <file>** - Sends a .csv file to the node and prints the statistics to the consol.
-- **IMGT ROTATE <degrees>** – Transform the uploaded image by rotating it the specified number of degrees. Only PNG and JPG images are accepted. (Requires an image node.)
-- **IMGT RESIZE <width> <height>** – Change the dimensions of the uploaded image; input must be PNG or JPG.
-- **IMGT TOGRAYSCALE** – Convert the current image to grayscale; only PNG/JPG files are allowed.
-- **NODE_LIST** – Displays all connected service nodes and their offered services.
-- **list** – Redisplay this command menu.
-- **exit** – Disconnect the client from the server.
+| Command syntax | Description | Requirements |
+|----------------|-------------|--------------|
+| `upload` | Open file chooser and send the selected file to the server. | None; must run before file‑based services. |
+| `list` | Show available commands again. | – |
+| `exit` | Disconnect from server. | – |
+| `NODE_LIST` | Show all connected service nodes and the services they offer. | Server must be running. |
+| `BASE64 ENCODE_FILE` | Ask a Base64 node to encode the currently uploaded file; response downloaded as `.txt`. | A file must be uploaded. |
+| `BASE64 DECODE_FILE [ext]` | Ask a Base64 node to decode the uploaded file’s contents; optional output extension. | File uploaded; output extension defaults to original or `bin`. |
+| `BASE64 ENCODE_TEXT <text>` | Send text to a Base64 node and get its encoded form. | Node must be connected. |
+| `BASE64 DECODE_TEXT <text>` | Send Base64 text to decode. | Node must be connected. |
+| `ENTROPY` | Compute entropy of the uploaded file. | File uploaded. |
+| `CSV` | Analyze the uploaded CSV file and print statistics. | File uploaded with `.csv` extension. |
+| `TOPK FILE [k]` | Find top‑k terms in uploaded `.txt` file (default k = 3). | File uploaded with `.txt` extension. |
+| `TOPK [k] <text>` | Find top‑k terms in provided text string (default k = 3). | Node must be connected. |
+| `IMGT ROTATE <degrees>` | Rotate uploaded image by given degrees. | File uploaded (`.png` or `.jpg`) and image node available. |
+| `IMGT RESIZE <width> <height>` | Resize uploaded image. | File uploaded (`.png` or `.jpg`) and image node available. |
+| `IMGT TOGRAYSCALE` | Convert uploaded image to grayscale. | Same as rotate/resize. |
 
-Most of these commands require the corresponding service node to be running and registered with the server.
+> ⚠️ Many commands require the corresponding service node to be running.  Use `NODE_LIST` to verify.
+
+Feel free to explore by combining uploads with different service requests. Enjoy the microservices cluster!  

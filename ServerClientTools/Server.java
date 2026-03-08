@@ -20,6 +20,8 @@ public class Server {
     private DatagramSocket datagramSocket;
     private byte[] incomingData = new byte[1024];
     private Set<InetAddress> nodeAddresses = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private static final int SERVER_PORT_TCP = 1234;
+    private static final int SERVER_PORT_UDP = 1235;
 
 
     public Server(ServerSocket serverSocket, DatagramSocket datagramSocket) {
@@ -140,8 +142,8 @@ public class Server {
     }
 
     public static void main(String[] args) throws IOException{
-            ServerSocket serverSocket = new ServerSocket(1234); //Creates a server socket that listens on port 1234 for incoming client connections.
-            DatagramSocket datagramSocket = new DatagramSocket(1235); //Creates a datagram socket that listens on port 1235 for incoming UDP packets.
+            ServerSocket serverSocket = new ServerSocket(SERVER_PORT_TCP); //Creates a server socket that listens on port 1234 for incoming client connections.
+            DatagramSocket datagramSocket = new DatagramSocket(SERVER_PORT_UDP); //Creates a datagram socket that listens on port 1235 for incoming UDP packets.
             Server server = new Server(serverSocket, datagramSocket);
             System.out.println("Server is listening on port 1234 for TCP connections and port 1235 for UDP packets...");
             server.startServer(); //Starts the server to accept and handle client connections.

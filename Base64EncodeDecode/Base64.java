@@ -18,6 +18,9 @@ public class Base64{
     private DataInputStream dataInputStream;
     final static String base64Text = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     private static final int[] DECODE_TABLE = new int[256];
+    private static final String SERVER_HOST = "localhost";
+    private static final int SERVER_PORT_TCP = 1234;
+    private static final int SERVER_PORT_UDP = 1235;
 
     static {
         // Default all to invalid
@@ -288,7 +291,7 @@ public class Base64{
 
 
      public static void main(String[] args) throws Exception {
-        Socket socket = new Socket("localhost", 1234);
+        Socket socket = new Socket(SERVER_HOST, SERVER_PORT_TCP);
         DatagramSocket datagramSocket = new DatagramSocket();
         Base64 base64 = new Base64(socket, datagramSocket);
         String nodeId = java.util.UUID.randomUUID().toString();
@@ -307,7 +310,7 @@ public class Base64{
             @Override
             public void run() {
                 try {
-                    base64.sendHeartbeat("NODE_ALIVE|" + nodeId, InetAddress.getByName("localhost"), 1235);
+                    base64.sendHeartbeat("NODE_ALIVE|" + nodeId, InetAddress.getByName(SERVER_HOST), SERVER_PORT_UDP);
                     System.out.println("Sent heartbeat to server: NODE_ALIVE");
                 } catch (IOException e) {
                     e.printStackTrace();

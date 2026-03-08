@@ -30,6 +30,8 @@ public class Client {
     private int expectedChunks = 0;
     private int receivedChunks = 0;
     private java.util.List<File> filesToSend = new java.util.ArrayList<>();
+    private static final String SERVER_HOST = "localhost";
+    private static final int SERVER_PORT_TCP = 1234;
 
     public Client(Socket socket, String username) {
         try {
@@ -244,7 +246,7 @@ public class Client {
         Scanner scanner = new Scanner(System.in);
         System.out.print("Enter your username for the server: ");
         String username = scanner.nextLine();
-        Socket socket = new Socket("localhost", 1234); // Creates a socket that connects to the server running on
+        Socket socket = new Socket(SERVER_HOST, SERVER_PORT_TCP); // Creates a socket that connects to the server running on
                                                        // localhost at port 1234, allowing the client to communicate
                                                        // with the server and other clients connected to it
         Client client = new Client(socket, username);

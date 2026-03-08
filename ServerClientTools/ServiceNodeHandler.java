@@ -11,8 +11,7 @@ public class ServiceNodeHandler implements Runnable{
     private static ArrayList<ServiceNodeHandler> serviceNodeHandlers = new ArrayList<>();
     private final LinkedBlockingQueue<String> requestQueue = new LinkedBlockingQueue<>();
     private final LinkedBlockingQueue<String> responseQueue = new LinkedBlockingQueue<>();
-    private DataInputStream dataInputStream; // Used to read binary data from the client, such as files for entropy
-                                             // analysis
+    private DataInputStream dataInputStream;
     private String service;
     private DataOutputStream dataOutputStream;
     private DatagramSocket datagramSocket;
@@ -21,6 +20,15 @@ public class ServiceNodeHandler implements Runnable{
     private String nodeId;
     private static final ConcurrentHashMap<String, ServiceNodeHandler> connectedNodes = new ConcurrentHashMap<>();
 
+    // Sentinel value written to responseQueue when the node dies mid-request,
+    // so any thread blocked on requestService/requestServiceFile unblocks immediately
+    // instead of hanging forever.
+    public static final String NODE_ERROR_SENTINEL = "__NODE_ERROR__";
+
+    // How long requestService / requestServiceFile will wait before declaring
+    // the node unresponsive and returning an error to the client.
+    private static final long RESPONSE_TIMEOUT_MS = 10_000; // 10 seconds
+
     public ServiceNodeHandler(Socket socket, DatagramSocket datagramSocket) {
         try {
         this.socket = socket;
@@ -28,19 +36,21 @@ public class ServiceNodeHandler implements Runnable{
         this.dataInputStream = new DataInputStream(socket.getInputStream());
         this.dataOutputStream = new DataOutputStream(socket.getOutputStream());
         service = dataInputStream.readUTF().trim(); // First message from node should be its service type
-        nodeId = dataInputStream.readUTF().trim(); // Second message is a unique node ID (can be random or based on IP/port)
+        nodeId = dataInputStream.readUTF().trim(); // Second message is a unique node ID
         this.lastHeartbeat = Instant.now();
         serviceNodeHandlers.add(this);
 
         ServiceNodeHandler previous = connectedNodes.put(service, this);
         if (previous != null) {
+            // remove the old handler from the list so it doesn't show up in
+            // NODE_LIST and can't be used anymore.
+            previous.removeServiceNodeHandler();
             System.out.println("[WARN] Node " + service + " reconnected, replacing stale handler.");
         } else {
             System.out.println("[INFO] Node connected: " + service);
         }
 
     } catch (IOException e) {
-        // Instead of e.printStackTrace(), print a clean message
         System.err.println("[ERROR] Failed to initialize Node Handler: " + e.getMessage());
         try {
             if (socket != null) socket.close();
@@ -49,13 +59,37 @@ public class ServiceNodeHandler implements Runnable{
         }
     }
     }
-    //This is where communication with the service node happens
-    //The client handler sends a request to the service node handler
-    //when done this way we don't have to worry about the distinction between different types of service nodes, 
-    //we just send a request to the node and it processes it and sends back a response
+
+    /**
+     * Send a request to the node and wait up to RESPONSE_TIMEOUT_MS for a reply.
+     * If the node disconnects mid-request, run() will poison the responseQueue with
+     * NODE_ERROR_SENTINEL so this method unblocks and returns an error string
+     * rather than hanging forever.
+     */
     public String requestService(String input) throws InterruptedException {
         requestQueue.put(input);
-        return responseQueue.take(); // Wait for the service node to process the request and put a response in the queue
+        String response = responseQueue.poll(RESPONSE_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
+        if (response == null) {
+            // Timed out — treat the node as dead so the next isNodeConnected() call
+            // removes it from the active list.
+            removeServiceNodeHandler();
+            return NODE_ERROR_SENTINEL + "Request timed out — node may have disconnected.";
+        }
+        return response;
+    }
+
+    /**
+     * Same as requestService but used for file payloads.  Shares the same
+     * timeout-and-sentinel safeguard.
+     */
+    public String requestServiceFile(String input) throws InterruptedException {
+        requestQueue.put(input);
+        String response = responseQueue.poll(RESPONSE_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
+        if (response == null) {
+            removeServiceNodeHandler();
+            return NODE_ERROR_SENTINEL + "Request timed out — node may have disconnected.";
+        }
+        return response;
     }
 
     /**
@@ -65,7 +99,6 @@ public class ServiceNodeHandler implements Runnable{
      * and return false.
      */
     public boolean handshake(long timeoutMs) {
-        // if socket already closed we can fail fast
         if (socket == null || socket.isClosed()) {
             removeServiceNodeHandler();
             return false;
@@ -73,8 +106,8 @@ public class ServiceNodeHandler implements Runnable{
         try {
             requestQueue.put("PING");
             String resp = responseQueue.poll(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS);
-            if (resp == null) {
-                // timed out, treat node as dead
+            if (resp == null || resp.startsWith(NODE_ERROR_SENTINEL)) {
+                // timed out or node died while we waited
                 removeServiceNodeHandler();
                 return false;
             }
@@ -90,15 +123,6 @@ public class ServiceNodeHandler implements Runnable{
         return nodeId;
     }
 
-    /**
-     * Sends the given request string to the node and waits for its reply.
-     * The reply is returned verbatim; callers decide whether to treat it as
-     * raw bytes or a Base64 string.
-     */
-    public String requestServiceFile(String input) throws InterruptedException {
-        requestQueue.put(input);
-        return responseQueue.take(); // return the raw response string from node
-    }
     public String getService() {
         return this.service;
     }
@@ -119,43 +143,31 @@ public class ServiceNodeHandler implements Runnable{
         return serviceNodeHandlers;
     }
 
-   
-
     public void removeServiceNodeHandler() {
         serviceNodeHandlers.remove(this);
         connectedNodes.remove(service, this);
-        // broadcastMessage(service + " node has disconnected");
-        //System.out.println("A service has disconnected!");
     }
 
     public void closeEverything(Socket socket, DataInputStream dataInputStream, DataOutputStream dataOutputStream) {
         removeServiceNodeHandler();
         try {
             if (dataInputStream != null) {
-                dataInputStream.close(); // Closes the input stream reader, releasing any resources associated with it
-                                         // and preventing further reading from the client
+                dataInputStream.close();
             }
             if (dataOutputStream != null) {
-                dataOutputStream.close(); // Closes the output stream writer, releasing any resources associated with it
-                                          // and preventing further writing to the client
+                dataOutputStream.close();
             }
             if (socket != null) {
-                socket.close(); // Closes the socket connection between the server and the client, releasing any
-                                // resources associated with it and preventing further communication with the
-                                // client
+                socket.close();
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-
-    
-
     public static boolean isNodeConnected(String name) {
         ServiceNodeHandler h = connectedNodes.get(name);
         if (h == null) return false;
-        // remove handlers with closed sockets or stale heartbeats immediately
         try {
             if (h.socket == null || h.socket.isClosed()) {
                 h.removeServiceNodeHandler();
@@ -165,7 +177,7 @@ public class ServiceNodeHandler implements Runnable{
             h.removeServiceNodeHandler();
             return false;
         }
-        // heartbeat older than 2x interval (30s) ? treat as dead
+        // heartbeat older than 2x interval (30s) → treat as dead
         if (h.lastHeartbeat != null && h.lastHeartbeat.isBefore(Instant.now().minusSeconds(30))) {
             h.removeServiceNodeHandler();
             return false;
@@ -181,13 +193,6 @@ public class ServiceNodeHandler implements Runnable{
         return connectedNodes;
     }
 
-/* 
-    public String getNodeName() {
-        return nodeName;
-    }
- */
-
-    // Called internally when the heartbeat arrives
     public void refreshHeartbeat() {
         this.lastHeartbeat = Instant.now();
     }
@@ -211,9 +216,7 @@ public class ServiceNodeHandler implements Runnable{
     private void closeSocket() {
         try {
             if (socket != null) {
-                socket.close(); // Closes the socket connection between the server and the client, releasing any
-                                // resources associated with it and preventing further communication with the
-                                // client
+                socket.close();
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -231,8 +234,8 @@ public class ServiceNodeHandler implements Runnable{
     }
 
     public void sendTCPFiles(byte[] data) throws IOException {
-        dataOutputStream.writeInt(data.length); // First send the length of the data
-        dataOutputStream.write(data); // Then send the actual data
+        dataOutputStream.writeInt(data.length);
+        dataOutputStream.write(data);
     }
 
     public String processRequest(String request) {
@@ -240,9 +243,8 @@ public class ServiceNodeHandler implements Runnable{
     }
 
     /**
-     * Write a potentially large request string to the node using the same
-     * chunking protocol the node uses for responses.  This avoids the 64‑KB
-     * limitation of DataOutputStream.writeUTF.
+     * Write a potentially large request string to the node using chunking to
+     * avoid the 64-KB limitation of DataOutputStream.writeUTF.
      */
     private void sendRequest(String request) throws IOException {
         int chunkSize = 60000;
@@ -265,7 +267,8 @@ public class ServiceNodeHandler implements Runnable{
     public void run() {
         try {
             while (socket.isConnected()) {
-                String request = requestQueue.take();  // waits for work
+                String request = requestQueue.take(); // waits for work
+
                 // respond immediately to ping requests without involving the node process
                 if ("PING".equals(request)) {
                     responseQueue.put("PONG");
@@ -285,26 +288,26 @@ public class ServiceNodeHandler implements Runnable{
                         if (chunkMsg.startsWith("FILE_RESPONSE_CHUNK|")) {
                             sb.append(chunkMsg.substring("FILE_RESPONSE_CHUNK|".length()));
                         } else {
-                            // unexpected message, still append raw
                             sb.append(chunkMsg);
                         }
                     }
                     response = sb.toString();
                 }
 
-                responseQueue.put(response);           // hand result back
+                responseQueue.put(response); // hand result back
             }
-        }catch (EOFException e) {
+        } catch (EOFException e) {
             System.out.println("[INFO] Node " + service + " closed the connection.");
-            removeServiceNodeHandler();
-        }catch (InterruptedException e) {
+        } catch (InterruptedException e) {
             System.out.println("[ERROR] ServiceNodeHandler interrupted: " + e.getMessage());
-            removeServiceNodeHandler();
-        }catch(IOException e){
+        } catch (IOException e) {
             System.out.println("[WARN] Connection lost with node: " + service);
+        } finally {
+            // *** KEY FIX: always poison the responseQueue on the way out so any
+            // thread currently blocked in requestService / requestServiceFile
+            // wakes up immediately and returns an error instead of hanging forever.
             removeServiceNodeHandler();
+            responseQueue.offer(NODE_ERROR_SENTINEL + "Node " + service + " disconnected unexpectedly.");
         }
     }
 }
-
-    

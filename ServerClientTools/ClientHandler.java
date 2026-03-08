@@ -75,7 +75,7 @@ public class ClientHandler implements Runnable {
                         sendMessageToNode(command);
                     }
                 }
-                else if(messageFromClient.startsWith("ENTROPY")) {
+                else if(messageFromClient.startsWith("ENTROPY" )) {
                     sendFileToNode(messageFromClient);
                 }else if (messageFromClient.startsWith("CSV")) {
                     sendToCSVNode();
@@ -119,7 +119,8 @@ public class ClientHandler implements Runnable {
                 return;
             }
         }
-        throw new RuntimeException("[ERROR] NODE NOT FOUND"); //Throws an exception if no service node is available to handle the request
+        broadcastMessageToSender("[ERROR] No appropriate service node found to handle the request.");
+        return;
     }
 
     public void sendFileToNode(String messageFromClient) throws InterruptedException {
@@ -179,7 +180,8 @@ public class ClientHandler implements Runnable {
                     }
                 }
             }
-            throw new RuntimeException("[ERROR] NODE NOT FOUND"); //Throws an exception if no entropy service node is available to handle the request, indicating that the requested service cannot be performed at this time
+            broadcastMessageToSender("[ERROR] No appropriate service node found to handle the request."); 
+            return;
         }
 
     public void sendToCSVNode() throws InterruptedException {
@@ -204,6 +206,7 @@ public class ClientHandler implements Runnable {
             }
         }
         broadcastMessageToSender("[ERROR] CSV service node not connected.");
+        return;
     }
 
     // Sends the currently uploaded file to a TOPK node. optional k may follow the word FILE
@@ -241,6 +244,7 @@ public class ClientHandler implements Runnable {
             }
         }
         broadcastMessageToSender("[ERROR] TOPK service node not connected.");
+        return;
     }
 
     // send the current file to an ImageTransformer node
@@ -316,6 +320,7 @@ public class ClientHandler implements Runnable {
             }
         }
         broadcastMessageToSender("[ERROR] ImageTransformer service node not connected.");
+        return;
     }
     public static String getFileExtension(String fileName){
         int i = fileName.lastIndexOf('.'); //Finds the last occurrence of the '.' character in the file name, which is typically used to separate the file name from its extension
@@ -366,6 +371,7 @@ public class ClientHandler implements Runnable {
             }
         }
         broadcastMessageToSender("[ERROR] TOPK service node not connected.");
+        return;
     }
 
     public void fileDownload(String fileName, String fileExtension, byte[] fileContent) {

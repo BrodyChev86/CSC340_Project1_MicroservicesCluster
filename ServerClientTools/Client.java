@@ -32,7 +32,7 @@ public class Client {
     private int expectedChunks = 0;
     private int receivedChunks = 0;
     private java.util.List<File> filesToSend = new java.util.ArrayList<>();
-    private static final String SERVER_HOST = "192.168.86.22";
+    private static final String SERVER_HOST = "localhost";
     private static final int SERVER_PORT_TCP = 1234;
 
     public Client(Socket socket, String username) {

@@ -157,6 +157,28 @@ public class ClientHandler implements Runnable {
         return ServiceNodeHandler.isNodeConnected(serviceName);
     }
 
+    /**
+     * Send a lightweight ping message to the given handler and expect a pong.
+     * This allows us to detect a dropped or unresponsive node even if the
+     * socket remains in the connected list.
+     */
+    private boolean verifyNode(ServiceNodeHandler handler) {
+        // quick pre‑checks to avoid even sending a ping if the socket has
+        // already closed or the heartbeat is stale.  The static helper will
+        // also purge the handler from global maps.
+        if (!ServiceNodeHandler.isNodeConnected(handler.getService())) {
+            return false;
+        }
+
+        // do a brief handshake; mostly this catches the rare case where the
+        // connection dropped between the pre‑check and now.
+        try {
+            return handler.handshake(200);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     public void sendMessageToNode(String input) throws InterruptedException {
         // sanity check: caller should have already verified but be defensive
         if (!isNodeConnected("BASE64")) {
@@ -169,6 +191,10 @@ public class ClientHandler implements Runnable {
         ServiceNodeHandler.getServiceNodeHandlers().size());
         for (ServiceNodeHandler serviceNodeHandler : ServiceNodeHandler.getServiceNodeHandlers()) {
             if ("BASE64".equals(serviceNodeHandler.getService())) {
+                if (!verifyNode(serviceNodeHandler)) {
+                    broadcastMessageToSender("[ERROR] BASE64 service node is unresponsive.");
+                    return;
+                }
                 base64 = serviceNodeHandler.requestService(input); 
                 broadcastMessageToSender("Result: " + base64); //Sends the result of the Base64 operation back to the client
                 return;
@@ -186,6 +212,10 @@ public class ClientHandler implements Runnable {
             }
             for (ServiceNodeHandler serviceNodeHandler : ServiceNodeHandler.getServiceNodeHandlers()) {
                 if ("ENTROPY".equals(serviceNodeHandler.getService())) {
+                    if (!verifyNode(serviceNodeHandler)) {
+                        broadcastMessageToSender("[ERROR] ENTROPY service node is unresponsive.");
+                        return;
+                    }
                     if (currentFile == null){
                         broadcastMessageToSender("No file uploaded. Please upload a file to analyze its entropy.");
                         return;
@@ -198,6 +228,10 @@ public class ClientHandler implements Runnable {
                     }
                 }
                 if("BASE64".equals(serviceNodeHandler.getService())){
+                    if (!verifyNode(serviceNodeHandler)) {
+                        broadcastMessageToSender("[ERROR] BASE64 service node is unresponsive.");
+                        return;
+                    }
                     if(currentFile == null){
                         broadcastMessageToSender("No file uploaded. Please upload a file to encode/decode.");
                         return;
@@ -251,6 +285,10 @@ public class ClientHandler implements Runnable {
         }
         for (ServiceNodeHandler serviceNodeHandler : ServiceNodeHandler.getServiceNodeHandlers()) {
             if ("CSV_Stats".equals(serviceNodeHandler.getService())) {
+                if (!verifyNode(serviceNodeHandler)) {
+                    broadcastMessageToSender("[ERROR] CSV_Stats service node is unresponsive.");
+                    return;
+                }
                 if (currentFile == null) {
                     broadcastMessageToSender("No file uploaded. Please upload a CSV file first.");
                     return;
@@ -282,6 +320,10 @@ public class ClientHandler implements Runnable {
         }
         for (ServiceNodeHandler serviceNodeHandler : ServiceNodeHandler.getServiceNodeHandlers()) {
             if ("TOPK".equals(serviceNodeHandler.getService())) {
+                if (!verifyNode(serviceNodeHandler)) {
+                    broadcastMessageToSender("[ERROR] TOPK service node is unresponsive.");
+                    return;
+                }
                 if (currentFile == null) {
                     broadcastMessageToSender("No file uploaded. Please upload a file before requesting top-k terms.");
                     return;
@@ -324,6 +366,10 @@ public class ClientHandler implements Runnable {
         }
         for (ServiceNodeHandler serviceNodeHandler : ServiceNodeHandler.getServiceNodeHandlers()) {
             if ("IMGT".equals(serviceNodeHandler.getService())) {
+                if (!verifyNode(serviceNodeHandler)) {
+                    broadcastMessageToSender("[ERROR] IMGT service node is unresponsive.");
+                    return;
+                }
                 if (currentFile == null) {
                     broadcastMessageToSender("No file uploaded. Please upload an image to transform.");
                     return;
@@ -413,6 +459,10 @@ public class ClientHandler implements Runnable {
         }
         for (ServiceNodeHandler serviceNodeHandler : ServiceNodeHandler.getServiceNodeHandlers()) {
             if ("TOPK".equals(serviceNodeHandler.getService())) {
+                if (!verifyNode(serviceNodeHandler)) {
+                    broadcastMessageToSender("[ERROR] TOPK service node is unresponsive.");
+                    return;
+                }
                 if (command == null || command.isEmpty()) {
                     broadcastMessageToSender("Please provide text to analyze or use 'TOPK [k] <text>'.");
                     return;

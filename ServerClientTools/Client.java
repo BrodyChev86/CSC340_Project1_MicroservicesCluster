@@ -8,6 +8,8 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.Scanner;
+import java.util.UUID;
+
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
@@ -30,7 +32,7 @@ public class Client {
     private int expectedChunks = 0;
     private int receivedChunks = 0;
     private java.util.List<File> filesToSend = new java.util.ArrayList<>();
-    private static final String SERVER_HOST = "localhost";
+    private static final String SERVER_HOST = "192.168.86.22";
     private static final int SERVER_PORT_TCP = 1234;
 
     public Client(Socket socket, String username) {
@@ -244,8 +246,7 @@ public class Client {
 
     public static void main(String[] args) throws IOException {
         Scanner scanner = new Scanner(System.in);
-        System.out.print("Enter your username for the server: ");
-        String username = scanner.nextLine();
+        String username = UUID.randomUUID().toString();
         Socket socket = new Socket(SERVER_HOST, SERVER_PORT_TCP); // Creates a socket that connects to the server running on
                                                        // localhost at port 1234, allowing the client to communicate
                                                        // with the server and other clients connected to it

@@ -58,6 +58,34 @@ public class ServiceNodeHandler implements Runnable{
         return responseQueue.take(); // Wait for the service node to process the request and put a response in the queue
     }
 
+    /**
+     * Send a ping request via the normal queueing mechanism and wait up to
+     * {@code timeoutMs} milliseconds for a response.  If the node fails to
+     * respond or an interruption/IO error occurs we remove it from the list
+     * and return false.
+     */
+    public boolean handshake(long timeoutMs) {
+        // if socket already closed we can fail fast
+        if (socket == null || socket.isClosed()) {
+            removeServiceNodeHandler();
+            return false;
+        }
+        try {
+            requestQueue.put("PING");
+            String resp = responseQueue.poll(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS);
+            if (resp == null) {
+                // timed out, treat node as dead
+                removeServiceNodeHandler();
+                return false;
+            }
+            return "PONG".equals(resp);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            removeServiceNodeHandler();
+            return false;
+        }
+    }
+
     public String getNodeId() {
         return nodeId;
     }
@@ -125,7 +153,24 @@ public class ServiceNodeHandler implements Runnable{
     
 
     public static boolean isNodeConnected(String name) {
-        return connectedNodes.containsKey(name);
+        ServiceNodeHandler h = connectedNodes.get(name);
+        if (h == null) return false;
+        // remove handlers with closed sockets or stale heartbeats immediately
+        try {
+            if (h.socket == null || h.socket.isClosed()) {
+                h.removeServiceNodeHandler();
+                return false;
+            }
+        } catch (Exception e) {
+            h.removeServiceNodeHandler();
+            return false;
+        }
+        // heartbeat older than 2x interval (30s) ? treat as dead
+        if (h.lastHeartbeat != null && h.lastHeartbeat.isBefore(Instant.now().minusSeconds(30))) {
+            h.removeServiceNodeHandler();
+            return false;
+        }
+        return true;
     }
 
     public static ServiceNodeHandler getNode(String name) {
@@ -221,6 +266,12 @@ public class ServiceNodeHandler implements Runnable{
         try {
             while (socket.isConnected()) {
                 String request = requestQueue.take();  // waits for work
+                // respond immediately to ping requests without involving the node process
+                if ("PING".equals(request)) {
+                    responseQueue.put("PONG");
+                    continue;
+                }
+
                 sendRequest(request);
 
                 String response = dataInputStream.readUTF();
@@ -245,10 +296,13 @@ public class ServiceNodeHandler implements Runnable{
             }
         }catch (EOFException e) {
             System.out.println("[INFO] Node " + service + " closed the connection.");
+            removeServiceNodeHandler();
         }catch (InterruptedException e) {
             System.out.println("[ERROR] ServiceNodeHandler interrupted: " + e.getMessage());
+            removeServiceNodeHandler();
         }catch(IOException e){
             System.out.println("[WARN] Connection lost with node: " + service);
+            removeServiceNodeHandler();
         }
     }
 }

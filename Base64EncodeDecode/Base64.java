@@ -316,7 +316,7 @@ public class Base64{
                     e.printStackTrace();
                 }
             }
-        }, 0, 5000);
+        }, 0, 15000);
 
         base64.listenForMessage();
     }

@@ -283,7 +283,7 @@ public class ImageTransformer {
                         e.printStackTrace();
                     }
                 }
-            }, 0, 5000);
+            }, 0, 15000);
 
             node.listenForMessage();
         } catch (Exception e) {

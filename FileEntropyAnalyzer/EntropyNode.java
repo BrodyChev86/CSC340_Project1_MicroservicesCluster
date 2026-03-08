@@ -136,7 +136,7 @@ public class EntropyNode {
                     e.printStackTrace();
                 }
             }
-        }, 0, 5000);
+        }, 0, 15000);
         
         entropyNode.listenForMessage(); // Starts a thread to listen for incoming messages from the server, enabling the
         // client to receive messages from other clients in real-time

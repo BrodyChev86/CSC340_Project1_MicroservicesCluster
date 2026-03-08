@@ -37,7 +37,7 @@ public class Server {
             public void run() {
                 Instant now = Instant.now();
                 ServiceNodeHandler.getAllNodes().values().removeIf(node -> {
-                    if (Duration.between(node.getLastHeartbeat(), now).getSeconds() > 10) {
+                    if (Duration.between(node.getLastHeartbeat(), now).getSeconds() > 120) {
                         System.out.println("[TIMEOUT] Removing stale node: " + node.getService());
                         node.timeoutDisconnect(); // Close its socket
                         return true;

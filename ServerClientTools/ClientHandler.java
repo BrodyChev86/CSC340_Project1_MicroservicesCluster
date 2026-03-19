@@ -311,9 +311,9 @@ public class ClientHandler implements Runnable {
         String fileAsString = java.util.Base64.getEncoder().encodeToString(currentFile.getData());
         String payload = "CSV|" + currentFile.getFileName() + "|" + fileAsString;
 
-        System.out.println("[DEBUG] About to submit to RequestQueue with service name: " + "CSV_Stats");
+        System.out.println("[DEBUG] Submitting CSV request to RequestQueue");
         RequestQueue.PendingRequest ticket = RequestQueue.submit("CSV_Stats", payload);
-        System.out.println("[DEBUG] Submitted successfully");
+        System.out.println("[DEBUG] Ticket submitted, waiting for response...");
         String response = ticket.waitForResponse();
         System.out.println("[DEBUG] Got response: " + response);
 
@@ -571,23 +571,10 @@ public class ClientHandler implements Runnable {
     public void broadcastMessageToSender(String messageToSend){
         for (ClientHandler clientHandler : clientHandlers) {
             try {
-                if (clientHandler.clientUsername.equals(clientUsername)) {
-                    int chunkSize = 30000;
-                    if (messageToSend.getBytes("UTF-8").length <= 65535) {
-                        clientHandler.dataOutputStream.writeUTF(messageToSend);
-                        clientHandler.dataOutputStream.flush();
-                    } else {
-                        int total = (int) Math.ceil((double) messageToSend.length() / chunkSize);
-                        clientHandler.dataOutputStream.writeUTF("TEXT_RESPONSE_START|" + total);
-                        clientHandler.dataOutputStream.flush();
-                        for (int i = 0; i < total; i++) {
-                            int start = i * chunkSize;
-                            int end = Math.min(start + chunkSize, messageToSend.length());
-                            clientHandler.dataOutputStream.writeUTF("TEXT_RESPONSE_CHUNK|" + messageToSend.substring(start, end));
-                            clientHandler.dataOutputStream.flush();
-                        }
-                    }
-                }
+               if(clientHandler.clientUsername.equals(clientUsername)){
+                    clientHandler.dataOutputStream.writeUTF(messageToSend);
+                    clientHandler.dataOutputStream.flush();
+               }
             } catch (IOException e) {
                 closeEverything(socket, dataInputStream, dataOutputStream);
             }

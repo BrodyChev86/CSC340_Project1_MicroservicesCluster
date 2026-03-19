@@ -28,7 +28,7 @@ public class ServiceNodeHandler implements Runnable{
 
     // How long requestService / requestServiceFile will wait before declaring
     // the node unresponsive and returning an error to the client.
-    private static final long RESPONSE_TIMEOUT_MS = 300_000;; // 100 seconds
+    private static final long RESPONSE_TIMEOUT_MS = 100_000; // 100 seconds
 
     public ServiceNodeHandler(Socket socket, DataInputStream inStream, DatagramSocket datagramSocket) {        
         try {
@@ -255,7 +255,7 @@ public class ServiceNodeHandler implements Runnable{
      * avoid the 64-KB limitation of DataOutputStream.writeUTF.
      */
     private void sendRequest(String request) throws IOException {
-        int chunkSize = 30000;
+        int chunkSize = 60000;
         if (request.length() <= chunkSize) {
             dataOutputStream.writeUTF(request);
             dataOutputStream.flush();
@@ -275,10 +275,8 @@ public class ServiceNodeHandler implements Runnable{
     public void run() {
         // Pulls jobs from RequestQueue and forwards them through the node
         Thread dispatcher = new Thread(() -> {
-            System.out.println("[DEBUG] Dispatcher started for service: " + service);
-            while (true) {
+            while (!socket.isClosed()) {
                 try {
-
                     RequestQueue.PendingRequest job = RequestQueue.take(service);
                     System.out.println("[DEBUG] Dispatcher picked up job for service: " + service);
                     String response = requestService(job.payload);
@@ -293,11 +291,8 @@ public class ServiceNodeHandler implements Runnable{
         dispatcher.setDaemon(true);
         dispatcher.start();
 
-        System.out.println("[DEBUG] run() loop started for service: " + service);
-
         try {
             while (socket.isConnected()) {
-                System.out.println("[DEBUG] run() waiting for work on requestQueue...");
                 String request = requestQueue.take(); // waits for work
 
                 System.out.println("[DEBUG] run() loop got request: " + request.substring(0, Math.min(50, request.length())));

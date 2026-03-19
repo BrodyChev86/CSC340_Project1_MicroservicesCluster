@@ -29,7 +29,7 @@ public class ServiceNodeHandler implements Runnable{
     // the node unresponsive and returning an error to the client.
     private static final long RESPONSE_TIMEOUT_MS = 10_000; // 10 seconds
 
-    public ServiceNodeHandler(Socket socket, DatagramSocket datagramSocket) {
+    public ServiceNodeHandler(Socket socket, DataInputStream inStream, DatagramSocket datagramSocket) {        
         try {
         this.socket = socket;
         this.datagramSocket = datagramSocket;
@@ -42,6 +42,8 @@ public class ServiceNodeHandler implements Runnable{
 
         ServiceNodeHandler previous = connectedNodes.put(service, this);
         if (previous != null) {
+            // remove the old handler from the list so it doesn't show up in
+            // NODE_LIST and can't be used anymore.
             previous.removeServiceNodeHandler();
             System.out.println("[WARN] Node " + service + " reconnected, replacing stale handler.");
         } else {
@@ -68,6 +70,8 @@ public class ServiceNodeHandler implements Runnable{
         requestQueue.put(input);
         String response = responseQueue.poll(RESPONSE_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
         if (response == null) {
+            // Timed out — treat the node as dead so the next isNodeConnected() call
+            // removes it from the active list.
             removeServiceNodeHandler();
             return NODE_ERROR_SENTINEL + "Request timed out — node may have disconnected.";
         }
@@ -103,6 +107,7 @@ public class ServiceNodeHandler implements Runnable{
             requestQueue.put("PING");
             String resp = responseQueue.poll(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS);
             if (resp == null || resp.startsWith(NODE_ERROR_SENTINEL)) {
+                // timed out or node died while we waited
                 removeServiceNodeHandler();
                 return false;
             }
@@ -260,27 +265,6 @@ public class ServiceNodeHandler implements Runnable{
     }
 
     public void run() {
-
-        // --- NEW: Dispatcher thread ---
-        // Pulls jobs from the shared RequestQueue for this service,
-        // forwards them through the existing requestService() machinery,
-        // and completes the ticket so the waiting ClientHandler unblocks.
-        Thread dispatcher = new Thread(() -> {
-            while (!socket.isClosed()) {
-                try {
-                    RequestQueue.PendingRequest job = RequestQueue.take(service);
-                    String response = requestService(job.payload);
-                    job.complete(response);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-            }
-        }, "dispatcher-" + service);
-        dispatcher.setDaemon(true);
-        dispatcher.start();
-        // --- END NEW ---
-
         try {
             while (socket.isConnected()) {
                 String request = requestQueue.take(); // waits for work
@@ -319,8 +303,9 @@ public class ServiceNodeHandler implements Runnable{
         } catch (IOException e) {
             System.out.println("[WARN] Connection lost with node: " + service);
         } finally {
-            // Always poison the responseQueue on the way out so any thread currently
-            // blocked in requestService / requestServiceFile wakes up immediately.
+            // *** KEY FIX: always poison the responseQueue on the way out so any
+            // thread currently blocked in requestService / requestServiceFile
+            // wakes up immediately and returns an error instead of hanging forever.
             removeServiceNodeHandler();
             responseQueue.offer(NODE_ERROR_SENTINEL + "Node " + service + " disconnected unexpectedly.");
         }

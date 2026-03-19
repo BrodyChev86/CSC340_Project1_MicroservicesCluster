@@ -81,7 +81,7 @@ public class Server {
                         InetAddress ip = socket.getInetAddress();
                         nodeAddresses.add(ip); // Register node IP for reference
                         System.out.println("Node connected: " + ip);
-                        new Thread(new ServiceNodeHandler(socket, datagramSocket)).start();
+                        new Thread(new ServiceNodeHandler(socket, reader, datagramSocket)).start();
                     } else {
                         InetAddress ip = socket.getInetAddress();
                         System.out.println("Client connected: " + ip);

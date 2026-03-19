@@ -17,7 +17,7 @@ public class CSV_Reader {
     private static final String SERVICE_NAME = "CSV_Stats";
     private static final String NODE_ID = UUID.randomUUID().toString();
     private static final int HEARTBEAT_INTERVAL_MS = 15_000; // Heartbeat = 15 seconds
-    private static final int CHUNK_SIZE = 60_000; // 60,000 Characters Chunk Max
+    private static final int CHUNK_SIZE = 30_000; // 30,000 Characters Chunk Max
 
     // Socket I/O
     private static Socket socket;
@@ -77,8 +77,8 @@ public class CSV_Reader {
 
     // Reads requests from server
     private static void listenForRequests() throws IOException {
-        System.out.println("[INFO] Listening for requests...");
         while (socket.isConnected()) {
+            System.out.println("[INFO] Waiting for request...");
             String request = dataInputStream.readUTF();
 
             // Recieve large requests in chunks
@@ -114,7 +114,7 @@ public class CSV_Reader {
     private static String handleRequest(String request) {
         try {
             // Split payload into parts (CSV|filename|base64data)
-            String[] parts = request.split("\\|");
+            String[] parts = request.split("\\|", 3);
 
             // ensure filename looks like a CSV
             String filename = parts.length > 1 ? parts[1] : "";

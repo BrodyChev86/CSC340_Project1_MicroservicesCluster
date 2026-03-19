@@ -183,15 +183,24 @@ public class ImageTransformer {
                         ImageIO.write(this.image, format, baos);
                         sendFile(baos.toByteArray());
                     } else if (msgFromServer.startsWith("RESIZE|")) {
-                        String[] parts = msgFromServer.split("\\|");
+                        String[] parts = msgFromServer.split("\\|", 5);
                         int w = Integer.parseInt(parts[1]);
                         int h = Integer.parseInt(parts[2]);
                         String ext = parts[3].toLowerCase();
+
+                        // Reject unreasonably large resize requests
+                        if (w > 10000 || h > 10000 || (long) w * h > 50_000_000) {
+                            dataOutputStream.writeUTF("[ERROR] Requested dimensions too large. Maximum is 10000x10000 and 50 megapixels.");
+                            dataOutputStream.flush();
+                            continue;
+                        }
+
                         if (!ext.equals("png") && !ext.equals("jpg")) {
                             dataOutputStream.writeUTF("[ERROR] Only PNG and JPG are supported.");
                             dataOutputStream.flush();
                             continue;
                         }
+
                         byte[] imgBytes = java.util.Base64.getDecoder().decode(parts[4]);
                         BufferedImage img = ImageIO.read(new java.io.ByteArrayInputStream(imgBytes));
                         this.image = img;

@@ -95,6 +95,17 @@ public class Client {
                             continue;
                         }
 
+                        if (msgFromServer.startsWith("TEXT_RESPONSE_START|")) {
+                            int totalChunks = Integer.parseInt(msgFromServer.split("\\|")[1]);
+                            StringBuilder sb = new StringBuilder();
+                            for (int i = 0; i < totalChunks; i++) {
+                                String chunk = dataInputStream.readUTF();
+                                sb.append(chunk.substring("TEXT_RESPONSE_CHUNK|".length()));
+                            }
+                            System.out.println(sb.toString());
+                            continue;
+                        }
+
                         if (msgFromServer.startsWith("FILE_CHUNK|")) {
                             fileBuffer.append(msgFromServer.substring("FILE_CHUNK|".length()));
                             receivedChunks++;
@@ -121,6 +132,8 @@ public class Client {
      * sent to indicate completion.
      */
     private void fileUpload() {
+        java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+
         JFrame jFrame = new JFrame("File Upload");
         jFrame.setSize(450, 500);
         jFrame.setLayout(new BoxLayout(jFrame.getContentPane(), BoxLayout.Y_AXIS));
@@ -128,8 +141,8 @@ public class Client {
         jFrame.addWindowListener(new java.awt.event.WindowAdapter() {
             @Override
             public void windowClosed(java.awt.event.WindowEvent windowEvent) {
-                sendFileUploadMessage();
                 isUploading = false;
+                latch.countDown(); // release the listener thread
             }
         });
 
@@ -195,9 +208,16 @@ public class Client {
                         jLabelFileName.setText("Error sending: " + file.getName());
                     }
                 }
+
+                // send end-of-upload sentinel so server can exit upload mode
+                sendFileUploadMessage();
+                isUploading = false;
+
                 jLabelFileName.setText(successCount + " file(s) sent successfully!");
                 filesToSend.clear();
-                isUploading = false;
+
+                // Optional: close upload dialog automatically
+                jFrame.dispose();
             }
         });
 
@@ -205,6 +225,13 @@ public class Client {
         jFrame.add(jLabelFileName);
         jFrame.add(jPanelButtons);
         jFrame.setVisible(true);
+
+        // Block the listener thread here until the window is closed
+        try {
+            latch.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private void fileDownload(String fileName, String fileExtension, byte[] fileContent) {

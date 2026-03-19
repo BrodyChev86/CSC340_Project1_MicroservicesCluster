@@ -8,7 +8,7 @@ import java.util.ArrayList;
 
 public class ClientHandler implements Runnable {
 
-    public static ArrayList<ClientHandler> clientHandlers = new ArrayList<>();
+    public static java.util.List<ClientHandler> clientHandlers = new java.util.concurrent.CopyOnWriteArrayList<>();;
     private ArrayList<FileHandler> fileHandlers = new ArrayList<>();
     private Socket socket;
     private DataInputStream dataInputStream;
@@ -82,7 +82,7 @@ public class ClientHandler implements Runnable {
                 if(messageFromClient.equals("upload")){
                     broadcastMessageToSender("FILE_UPLOAD");
                     isUploading = true;
-                    fileUpload();
+                    fileUpload(); // back to blocking on the run() thread
                 }else if(messageFromClient.equals("exit")){
                     removeClientHandler();
                     break;
@@ -151,7 +151,14 @@ public class ClientHandler implements Runnable {
                         broadcastMessageToSender("[ERROR] CSV_Stats service node not connected.");
                         continue;
                     }
-                    sendToCSVNode();
+                    new Thread(() -> {
+                    try {
+                        sendToCSVNode();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        broadcastMessageToSender("[ERROR] CSV request interrupted.");
+                    }
+                    }, "csv-" + clientUsername).start();
                 }else if (messageFromClient.startsWith("TOPK")) {
                     if (!isNodeConnected("TOPK")) {
                         broadcastMessageToSender("[ERROR] TOPK service node not connected.");
@@ -571,10 +578,24 @@ public class ClientHandler implements Runnable {
     public void broadcastMessageToSender(String messageToSend){
         for (ClientHandler clientHandler : clientHandlers) {
             try {
-               if(clientHandler.clientUsername.equals(clientUsername)){
-                    clientHandler.dataOutputStream.writeUTF(messageToSend);
-                    clientHandler.dataOutputStream.flush();
-               }
+                if (clientHandler.clientUsername.equals(clientUsername)) {
+                    byte[] msgBytes = messageToSend.getBytes("UTF-8");
+                    if (msgBytes.length <= 65535) {
+                        clientHandler.dataOutputStream.writeUTF(messageToSend);
+                        clientHandler.dataOutputStream.flush();
+                    } else {
+                        int chunkSize = 30000;
+                        int total = (int) Math.ceil((double) messageToSend.length() / chunkSize);
+                        clientHandler.dataOutputStream.writeUTF("TEXT_RESPONSE_START|" + total);
+                        clientHandler.dataOutputStream.flush();
+                        for (int i = 0; i < total; i++) {
+                            int start = i * chunkSize;
+                            int end = Math.min(start + chunkSize, messageToSend.length());
+                            clientHandler.dataOutputStream.writeUTF("TEXT_RESPONSE_CHUNK|" + messageToSend.substring(start, end));
+                            clientHandler.dataOutputStream.flush();
+                        }
+                    }
+                }
             } catch (IOException e) {
                 closeEverything(socket, dataInputStream, dataOutputStream);
             }

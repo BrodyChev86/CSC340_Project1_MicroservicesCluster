@@ -102,6 +102,17 @@ public class Client {
                             }
                             continue;
                         }
+
+                        if (msgFromServer.startsWith("TEXT_RESPONSE_START|")) {
+                            int totalChunks = Integer.parseInt(msgFromServer.split("\\|")[1]);
+                            StringBuilder sb = new StringBuilder();
+                            for (int i = 0; i < totalChunks; i++) {
+                                String chunk = dataInputStream.readUTF();
+                                sb.append(chunk.substring("TEXT_RESPONSE_CHUNK|".length()));
+                            }
+                            System.out.println(sb.toString());
+                            continue;
+                        }
                         System.out.println(msgFromServer);
                     } catch (IOException e) {
                         closeEverything(socket, dataInputStream, dataOutputStream);

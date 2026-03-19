@@ -34,7 +34,7 @@ public class ServiceNodeHandler implements Runnable{
         try {
         this.socket = socket;
         this.datagramSocket = datagramSocket;
-        this.dataInputStream = new DataInputStream(socket.getInputStream());
+        this.dataInputStream = inStream;
         this.dataOutputStream = new DataOutputStream(socket.getOutputStream());
         service = dataInputStream.readUTF().trim(); // First message from node should be its service type
         nodeId = dataInputStream.readUTF().trim(); // Second message is a unique node ID
@@ -273,9 +273,29 @@ public class ServiceNodeHandler implements Runnable{
     }
 
     public void run() {
+        // Pulls jobs from RequestQueue and forwards them through the node
+        Thread dispatcher = new Thread(() -> {
+            while (!socket.isClosed()) {
+                try {
+                    RequestQueue.PendingRequest job = RequestQueue.take(service);
+                    System.out.println("[DEBUG] Dispatcher picked up job for service: " + service);
+                    String response = requestService(job.payload);
+                    System.out.println("[DEBUG] requestService returned: " + response);
+                    job.complete(response);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }, "dispatcher-" + service);
+        dispatcher.setDaemon(true);
+        dispatcher.start();
+
         try {
             while (socket.isConnected()) {
                 String request = requestQueue.take(); // waits for work
+
+                System.out.println("[DEBUG] run() loop got request: " + request.substring(0, Math.min(50, request.length())));
 
                 // respond immediately to ping requests without involving the node process
                 if ("PING".equals(request)) {

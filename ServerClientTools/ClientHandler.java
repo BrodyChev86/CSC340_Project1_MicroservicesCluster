@@ -311,8 +311,11 @@ public class ClientHandler implements Runnable {
         String fileAsString = java.util.Base64.getEncoder().encodeToString(currentFile.getData());
         String payload = "CSV|" + currentFile.getFileName() + "|" + fileAsString;
 
+        System.out.println("[DEBUG] Submitting CSV request to RequestQueue");
         RequestQueue.PendingRequest ticket = RequestQueue.submit("CSV_Stats", payload);
+        System.out.println("[DEBUG] Ticket submitted, waiting for response...");
         String response = ticket.waitForResponse();
+        System.out.println("[DEBUG] Got response: " + response);
 
         if (isNodeError(response)) {
             broadcastMessageToSender(nodeErrorMessage(response));

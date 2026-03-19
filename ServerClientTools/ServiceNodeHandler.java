@@ -41,13 +41,8 @@ public class ServiceNodeHandler implements Runnable{
         this.lastHeartbeat = Instant.now();
         serviceNodeHandlers.add(this);
 
-        ServiceNodeHandler previous = connectedNodes.put(service, this);
-        if (previous != null) {
-            previous.removeServiceNodeHandler();
-            System.out.println("[WARN] Node " + service + " reconnected, replacing stale handler.");
-        } else {
-            System.out.println("[INFO] Node connected: " + service);
-        }
+        connectedNodes.computeIfAbsent(service, k -> new java.util.concurrent.CopyOnWriteArrayList<>()).add(this);
+        System.out.println("[INFO] Node connected: " + service);
 
     } catch (IOException e) {
         System.err.println("[ERROR] Failed to initialize Node Handler: " + e.getMessage());

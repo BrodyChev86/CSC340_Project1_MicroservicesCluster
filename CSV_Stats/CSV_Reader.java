@@ -34,6 +34,7 @@ public class CSV_Reader {
             listenForRequests();
         } catch (IOException e) {
             System.err.println("[ERROR] Service node error: " + e.getMessage());
+            e.printStackTrace();
         } finally {
             shutdown();
         }

@@ -3,6 +3,13 @@
   "configurations": [
     {
       "type": "java",
+      "name": "Client",
+      "request": "launch",
+      "mainClass": "ServerClientTools.Client",
+      "projectName": "CSC340_Project1_MicroservicesCluster-1_3f23840b"
+    },
+    {
+      "type": "java",
       "name": "EntropyNode",
       "request": "launch",
       "mainClass": "FileEntropyAnalyzer.EntropyNode",

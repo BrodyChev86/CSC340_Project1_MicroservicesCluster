@@ -32,8 +32,8 @@ public class Client {
     private int expectedChunks = 0;
     private int receivedChunks = 0;
     private java.util.List<File> filesToSend = new java.util.ArrayList<>();
-    private static final String SERVER_HOST = "localhost";
-    private static final int SERVER_PORT_TCP = 1234;
+    private String SERVER_HOST = "10.111.134.253";
+    private int SERVER_PORT_TCP = 1234;
 
     public Client(Socket socket, String username) {
         try {
@@ -244,10 +244,18 @@ public class Client {
         }
     }
 
+
     public static void main(String[] args) throws IOException {
         Scanner scanner = new Scanner(System.in);
         String username = UUID.randomUUID().toString();
-        Socket socket = new Socket(SERVER_HOST, SERVER_PORT_TCP); // Creates a socket that connects to the server running on
+        System.out.print("Please input the server you would like to connect to like the following:\n" +"ServerIPv4,TCPport#\n");
+
+        String serverInputs = scanner.nextLine();
+        String[] splitServerInputs = serverInputs.split(",");
+        String serverIp = splitServerInputs[0];
+        int portNum = Integer.parseInt(splitServerInputs[1]);
+
+        Socket socket = new Socket(serverIp, portNum); // Creates a socket that connects to the server running on
                                                        // localhost at port 1234, allowing the client to communicate
                                                        // with the server and other clients connected to it
         Client client = new Client(socket, username);

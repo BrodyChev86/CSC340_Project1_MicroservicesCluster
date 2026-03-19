@@ -36,14 +36,14 @@ public class Server {
             @Override
             public void run() {
                 Instant now = Instant.now();
-                ServiceNodeHandler.getAllNodes().values().removeIf(node -> {
-                    if (Duration.between(node.getLastHeartbeat(), now).getSeconds() > 120) {
-                        System.out.println("[TIMEOUT] Removing stale node: " + node.getService());
-                        node.timeoutDisconnect(); // Close its socket
-                        return true;
+                for (java.util.List<ServiceNodeHandler> nodeList : ServiceNodeHandler.getAllNodes().values()) {
+                    for (ServiceNodeHandler node : nodeList) {
+                        if (Duration.between(node.getLastHeartbeat(), now).getSeconds() > 120) {
+                            System.out.println("[TIMEOUT] Removing stale node: " + node.getService());
+                            node.timeoutDisconnect(); // Close its socket
+                        }
                     }
-                    return false;
-                });
+                }
             }
         }, 5000, 5000);
         
@@ -105,11 +105,13 @@ public class Server {
                 return;
             }
             String incomingId = parts[1].trim();
-            for (ServiceNodeHandler handler : ServiceNodeHandler.getAllNodes().values()) {
-                if (incomingId.equals(handler.getNodeId())) {
-                    handler.refreshHeartbeat();
-                    System.out.println("[DEBUG] Heartbeat refreshed for node: " + handler.getService());
-                    return;
+            for (java.util.List<ServiceNodeHandler> handlers : ServiceNodeHandler.getAllNodes().values()) {
+                for (ServiceNodeHandler handler : handlers) {
+                    if (incomingId.equals(handler.getNodeId())) {
+                        handler.refreshHeartbeat();
+                        System.out.println("[DEBUG] Heartbeat refreshed for node: " + handler.getService());
+                        return;
+                    }
                 }
             }
             System.out.println("[WARN] No handler found for heartbeat id=" + incomingId + " from " + hostAddress);

@@ -11,7 +11,7 @@ import java.nio.charset.StandardCharsets;
 public class CSV_Reader {
 
     // Config
-    private static final String SERVER_HOST = "localhost";
+    private static final String SERVER_HOST = "10.111.134.253";
     private static final int SERVER_PORT_TCP = 1234;
     private static final int SERVER_PORT_UDP = 1235;
     private static final String SERVICE_NAME = "CSV_Stats";
@@ -34,6 +34,7 @@ public class CSV_Reader {
             listenForRequests();
         } catch (IOException e) {
             System.err.println("[ERROR] Service node error: " + e.getMessage());
+            e.printStackTrace();
         } finally {
             shutdown();
         }

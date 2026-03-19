@@ -8,7 +8,7 @@ import java.time.Instant;
 
 public class ServiceNodeHandler implements Runnable{
     private Socket socket;
-    private static ArrayList<ServiceNodeHandler> serviceNodeHandlers = new ArrayList<>();
+    private static final java.util.List<ServiceNodeHandler> serviceNodeHandlers = new java.util.concurrent.CopyOnWriteArrayList<>();
     private final LinkedBlockingQueue<String> requestQueue = new LinkedBlockingQueue<>();
     private final LinkedBlockingQueue<String> responseQueue = new LinkedBlockingQueue<>();
     private DataInputStream dataInputStream;
@@ -18,7 +18,8 @@ public class ServiceNodeHandler implements Runnable{
     private byte[] outgoingData = new byte[1024];
     private Instant lastHeartbeat;
     private String nodeId;
-    private static final ConcurrentHashMap<String, ServiceNodeHandler> connectedNodes = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, java.util.concurrent.CopyOnWriteArrayList<ServiceNodeHandler>> connectedNodes = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicInteger> rrIndexes = new ConcurrentHashMap<>();
 
     // Sentinel value written to responseQueue when the node dies mid-request,
     // so any thread blocked on requestService/requestServiceFile unblocks immediately
@@ -27,28 +28,21 @@ public class ServiceNodeHandler implements Runnable{
 
     // How long requestService / requestServiceFile will wait before declaring
     // the node unresponsive and returning an error to the client.
-    private static final long RESPONSE_TIMEOUT_MS = 100_000; // 10 seconds
+    private static final long RESPONSE_TIMEOUT_MS = 300_000;; // 100 seconds
 
-    public ServiceNodeHandler(Socket socket, DatagramSocket datagramSocket) {
+    public ServiceNodeHandler(Socket socket, DataInputStream inStream, DatagramSocket datagramSocket) {        
         try {
         this.socket = socket;
         this.datagramSocket = datagramSocket;
-        this.dataInputStream = new DataInputStream(socket.getInputStream());
+        this.dataInputStream = inStream;
         this.dataOutputStream = new DataOutputStream(socket.getOutputStream());
         service = dataInputStream.readUTF().trim(); // First message from node should be its service type
         nodeId = dataInputStream.readUTF().trim(); // Second message is a unique node ID
         this.lastHeartbeat = Instant.now();
         serviceNodeHandlers.add(this);
 
-        ServiceNodeHandler previous = connectedNodes.put(service, this);
-        if (previous != null) {
-            // remove the old handler from the list so it doesn't show up in
-            // NODE_LIST and can't be used anymore.
-            previous.removeServiceNodeHandler();
-            System.out.println("[WARN] Node " + service + " reconnected, replacing stale handler.");
-        } else {
-            System.out.println("[INFO] Node connected: " + service);
-        }
+        connectedNodes.computeIfAbsent(service, k -> new java.util.concurrent.CopyOnWriteArrayList<>()).add(this);
+        System.out.println("[INFO] Node connected: " + service);
 
     } catch (IOException e) {
         System.err.println("[ERROR] Failed to initialize Node Handler: " + e.getMessage());
@@ -139,13 +133,20 @@ public class ServiceNodeHandler implements Runnable{
         return this.dataOutputStream;
     }
 
-    public static ArrayList<ServiceNodeHandler> getServiceNodeHandlers() {
+    public static java.util.List<ServiceNodeHandler> getServiceNodeHandlers() {
         return serviceNodeHandlers;
     }
 
     public void removeServiceNodeHandler() {
         serviceNodeHandlers.remove(this);
-        connectedNodes.remove(service, this);
+        java.util.List<ServiceNodeHandler> list = connectedNodes.get(service);
+        if (list != null) {
+            list.remove(this);
+            if (list.isEmpty()) {
+                connectedNodes.remove(service);
+                rrIndexes.remove(service);
+            }
+        }
     }
 
     public void closeEverything(Socket socket, DataInputStream dataInputStream, DataOutputStream dataOutputStream) {
@@ -166,30 +167,37 @@ public class ServiceNodeHandler implements Runnable{
     }
 
     public static boolean isNodeConnected(String name) {
-        ServiceNodeHandler h = connectedNodes.get(name);
-        if (h == null) return false;
-        try {
-            if (h.socket == null || h.socket.isClosed()) {
-                h.removeServiceNodeHandler();
-                return false;
+        java.util.List<ServiceNodeHandler> handlers = connectedNodes.get(name);
+        if (handlers == null || handlers.isEmpty()) return false;
+
+        handlers.removeIf(h -> {
+            boolean dead = false;
+            try {
+                if (h.socket == null || h.socket.isClosed()) {
+                    dead = true;
+                } else if (h.lastHeartbeat != null && h.lastHeartbeat.isBefore(Instant.now().minusSeconds(30))) {
+                    dead = true;
+                }
+            } catch (Exception e) {
+                dead = true;
             }
-        } catch (Exception e) {
-            h.removeServiceNodeHandler();
-            return false;
-        }
-        // heartbeat older than 2x interval (30s) → treat as dead
-        if (h.lastHeartbeat != null && h.lastHeartbeat.isBefore(Instant.now().minusSeconds(30))) {
-            h.removeServiceNodeHandler();
-            return false;
-        }
-        return true;
+            if (dead) {
+                h.removeServiceNodeHandler();
+            }
+            return dead;
+        });
+
+        return !handlers.isEmpty();
     }
 
     public static ServiceNodeHandler getNode(String name) {
-        return connectedNodes.get(name);
+        java.util.List<ServiceNodeHandler> handlers = connectedNodes.get(name);
+        if (handlers == null || handlers.isEmpty()) return null;
+        int idx = rrIndexes.computeIfAbsent(name, key -> new java.util.concurrent.atomic.AtomicInteger(0)).getAndIncrement();
+        return handlers.get(Math.floorMod(idx, handlers.size()));
     }
 
-    public static ConcurrentHashMap<String, ServiceNodeHandler> getAllNodes() {
+    public static ConcurrentHashMap<String, java.util.concurrent.CopyOnWriteArrayList<ServiceNodeHandler>> getAllNodes() {
         return connectedNodes;
     }
 
@@ -247,7 +255,7 @@ public class ServiceNodeHandler implements Runnable{
      * avoid the 64-KB limitation of DataOutputStream.writeUTF.
      */
     private void sendRequest(String request) throws IOException {
-        int chunkSize = 60000;
+        int chunkSize = 30000;
         if (request.length() <= chunkSize) {
             dataOutputStream.writeUTF(request);
             dataOutputStream.flush();
@@ -265,9 +273,34 @@ public class ServiceNodeHandler implements Runnable{
     }
 
     public void run() {
+        // Pulls jobs from RequestQueue and forwards them through the node
+        Thread dispatcher = new Thread(() -> {
+            System.out.println("[DEBUG] Dispatcher started for service: " + service);
+            while (true) {
+                try {
+
+                    RequestQueue.PendingRequest job = RequestQueue.take(service);
+                    System.out.println("[DEBUG] Dispatcher picked up job for service: " + service);
+                    String response = requestService(job.payload);
+                    System.out.println("[DEBUG] requestService returned: " + response);
+                    job.complete(response);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }, "dispatcher-" + service);
+        dispatcher.setDaemon(true);
+        dispatcher.start();
+
+        System.out.println("[DEBUG] run() loop started for service: " + service);
+
         try {
             while (socket.isConnected()) {
+                System.out.println("[DEBUG] run() waiting for work on requestQueue...");
                 String request = requestQueue.take(); // waits for work
+
+                System.out.println("[DEBUG] run() loop got request: " + request.substring(0, Math.min(50, request.length())));
 
                 // respond immediately to ping requests without involving the node process
                 if ("PING".equals(request)) {

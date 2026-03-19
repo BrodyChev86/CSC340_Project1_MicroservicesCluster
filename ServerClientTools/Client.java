@@ -17,6 +17,7 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.border.EmptyBorder;
+
 //Code created with the help of a tutorial on YouTube by WittCode (https://youtu.be/gLfuZrrfKes?si=r0TVgY7UQkRsKLtl) and modified by BrodyChev86 to fit the requirements of the project
 
 public class Client {
@@ -32,7 +33,7 @@ public class Client {
     private int expectedChunks = 0;
     private int receivedChunks = 0;
     private java.util.List<File> filesToSend = new java.util.ArrayList<>();
-    private static final String SERVER_HOST = "localhost";
+    private static final String SERVER_HOST = PropertyFileReader.getIP();
     private static final int SERVER_PORT_TCP = 1234;
 
     public Client(Socket socket, String username) {

@@ -6,6 +6,8 @@ import java.net.*;
 import java.util.Timer;
 import java.util.TimerTask;
 
+import ServerClientTools.PropertyFileReader;
+
 
 public class EntropyNode {
     private Socket socket;
@@ -13,7 +15,7 @@ public class EntropyNode {
     private byte[] outgoingData = new byte[1024];
     private DataOutputStream dataOutputStream;
     private DataInputStream dataInputStream;
-     private static final String SERVER_HOST = "localhost";
+     private static final String SERVER_HOST = PropertyFileReader.getIP();
     private static final int SERVER_PORT_TCP = 1234;
     private static final int SERVER_PORT_UDP = 1235;
 

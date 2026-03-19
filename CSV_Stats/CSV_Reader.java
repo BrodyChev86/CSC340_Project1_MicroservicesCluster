@@ -6,12 +6,15 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.util.*;
+
+import ServerClientTools.PropertyFileReader;
+
 import java.nio.charset.StandardCharsets;
 
 public class CSV_Reader {
 
     // Config
-    private static final String SERVER_HOST = "localhost";
+    private static final String SERVER_HOST = PropertyFileReader.getIP();
     private static final int SERVER_PORT_TCP = 1234;
     private static final int SERVER_PORT_UDP = 1235;
     private static final String SERVICE_NAME = "CSV_Stats";

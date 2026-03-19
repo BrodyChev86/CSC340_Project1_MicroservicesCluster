@@ -27,7 +27,7 @@ public class ServiceNodeHandler implements Runnable{
 
     // How long requestService / requestServiceFile will wait before declaring
     // the node unresponsive and returning an error to the client.
-    private static final long RESPONSE_TIMEOUT_MS = 10_000; // 10 seconds
+    private static final long RESPONSE_TIMEOUT_MS = 100_000; // 10 seconds
 
     public ServiceNodeHandler(Socket socket, DatagramSocket datagramSocket) {
         try {

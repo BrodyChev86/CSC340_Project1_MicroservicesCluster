@@ -3,6 +3,62 @@
   "configurations": [
     {
       "type": "java",
+      "name": "CSV_Reader",
+      "request": "launch",
+      "mainClass": "CSV_Stats.CSV_Reader",
+      "projectName": "CSC340_Project1_MicroservicesCluster_865655da"
+    },
+    {
+      "type": "java",
+      "name": "ImageTransformer",
+      "request": "launch",
+      "mainClass": "ImageTransformer",
+      "projectName": "CSC340_Project1_MicroservicesCluster_865655da"
+    },
+    {
+      "type": "java",
+      "name": "EntropyNode",
+      "request": "launch",
+      "mainClass": "FileEntropyAnalyzer.EntropyNode",
+      "projectName": "CSC340_Project1_MicroservicesCluster_865655da"
+    },
+    {
+      "type": "java",
+      "name": "Base64",
+      "request": "launch",
+      "mainClass": "Base64EncodeDecode.Base64",
+      "projectName": "CSC340_Project1_MicroservicesCluster_865655da"
+    },
+    {
+      "type": "java",
+      "name": "PropertyFileReader",
+      "request": "launch",
+      "mainClass": "ServerClientTools.PropertyFileReader",
+      "projectName": "CSC340_Project1_MicroservicesCluster_865655da"
+    },
+    {
+      "type": "java",
+      "name": "TOPK",
+      "request": "launch",
+      "mainClass": "TOPKTerms.TOPK",
+      "projectName": "CSC340_Project1_MicroservicesCluster_865655da"
+    },
+    {
+      "type": "java",
+      "name": "Client",
+      "request": "launch",
+      "mainClass": "ServerClientTools.Client",
+      "projectName": "CSC340_Project1_MicroservicesCluster_865655da"
+    },
+    {
+      "type": "java",
+      "name": "Server",
+      "request": "launch",
+      "mainClass": "ServerClientTools.Server",
+      "projectName": "CSC340_Project1_MicroservicesCluster_865655da"
+    },
+    {
+      "type": "java",
       "name": "EntropyNode",
       "request": "launch",
       "mainClass": "FileEntropyAnalyzer.EntropyNode",

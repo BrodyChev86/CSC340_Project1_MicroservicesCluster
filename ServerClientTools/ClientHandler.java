@@ -119,7 +119,34 @@ public class ClientHandler implements Runnable {
                         continue;
                     }
                     sendFileToNode(messageFromClient);
-                }else if (messageFromClient.startsWith("CSV")) {
+                } else if (messageFromClient.startsWith("CSV_BATCH")) {
+                    if (!isNodeConnected("CSV_Stats")) {
+                        broadcastMessageToSender("[ERROR] CSV_Stats service node not connected.");
+                        continue;
+                    }
+                    String[] parts = messageFromClient.split("\\s+");
+                    int parallelRequests = 3;
+                    if (parts.length > 1) {
+                        try {
+                            parallelRequests = Math.max(1, Integer.parseInt(parts[1]));
+                        } catch (NumberFormatException nfe) {
+                            broadcastMessageToSender("[ERROR] CSV_BATCH usage: CSV_BATCH <num>");
+                            continue;
+                        }
+                    }
+                    for (int i = 0; i < parallelRequests; i++) {
+                        int requestId = i + 1;
+                        new Thread(() -> {
+                            try {
+                                broadcastMessageToSender("[INFO] CSV_BATCH request " + requestId + " started.");
+                                sendToCSVNode();
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                                broadcastMessageToSender("[ERROR] CSV_BATCH request " + requestId + " interrupted.");
+                            }
+                        }, "CSV_BATCH-" + requestId).start();
+                    }
+                } else if (messageFromClient.startsWith("CSV")) {
                     if (!isNodeConnected("CSV_Stats")) {
                         broadcastMessageToSender("[ERROR] CSV_Stats service node not connected.");
                         continue;
@@ -266,7 +293,8 @@ public class ClientHandler implements Runnable {
     // sendToCSVNode — CSV_Stats
     // ---------------------------------------------------------------
     public void sendToCSVNode() throws InterruptedException {
-        if (!isNodeConnected("CSV_Stats")) {
+        ServiceNodeHandler serviceNodeHandler = ServiceNodeHandler.getNode("CSV_Stats");
+        if (serviceNodeHandler == null || !isNodeConnected("CSV_Stats")) {
             broadcastMessageToSender("[ERROR] CSV_Stats service node not connected.");
             return;
         }

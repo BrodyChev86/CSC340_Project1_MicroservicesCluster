@@ -11,6 +11,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import ServerClientTools.PropertyFileReader;
+
 public class TOPK {
 
     private final List<List<String>> corpus; // tokenized corpus: list of documents
@@ -29,8 +31,8 @@ public class TOPK {
     );
     // Config
     private static final String SERVER_HOST = "10.111.134.253";
-    private static final int SERVER_PORT_TCP = 1234;
-    private static final int SERVER_PORT_UDP = 1235;
+    private static final int SERVER_PORT_TCP = PropertyFileReader.getServiceNodeTCPPort();
+    private static final int SERVER_PORT_UDP = PropertyFileReader.getServiceNodeUDPPort();
     private static final String SERVICE_NAME = "TOPK";
     private static final String NODE_ID = UUID.randomUUID().toString();
     private static final int HEARTBEAT_INTERVAL_MS = 15_000; // Heartbeat = 15 seconds

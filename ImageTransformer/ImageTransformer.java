@@ -14,8 +14,8 @@ public class ImageTransformer {
     private BufferedImage image;
     private String format;
     private static final String SERVER_HOST = PropertyFileReader.getIP();
-    private static final int SERVER_PORT_TCP = 1234;
-    private static final int SERVER_PORT_UDP = 1235;
+    private static final int SERVER_PORT_TCP = PropertyFileReader.getServiceNodeTCPPort();
+    private static final int SERVER_PORT_UDP = PropertyFileReader.getServiceNodeUDPPort();
 
     public ImageTransformer(String inputPath) throws IOException {
         File inputFile = new File(inputPath);

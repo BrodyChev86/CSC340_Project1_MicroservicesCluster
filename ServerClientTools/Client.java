@@ -249,12 +249,14 @@ public class Client {
     public static void main(String[] args) throws IOException {
         Scanner scanner = new Scanner(System.in);
         String username = UUID.randomUUID().toString();
-        System.out.print("Please input the server you would like to connect to like the following:\n" +"ServerIPv4,TCPport#\n");
+        //System.out.print("Please input the server you would like to connect to like the following:\n" +"ServerIPv4,TCPport#\n");
 
-        String serverInputs = scanner.nextLine();
-        String[] splitServerInputs = serverInputs.split(",");
-        String serverIp = splitServerInputs[0];
-        int portNum = Integer.parseInt(splitServerInputs[1]);
+        //String serverInputs = scanner.nextLine();
+        //String[] splitServerInputs = serverInputs.split(",");
+        //String serverIp = splitServerInputs[0];
+        //int portNum = Integer.parseInt(splitServerInputs[1]);
+        String serverIp = PropertyFileReader.getIP();
+        int portNum = PropertyFileReader.getClientPort();
 
         Socket socket = new Socket(serverIp, portNum); // Creates a socket that connects to the server running on
                                                        // localhost at port 1234, allowing the client to communicate

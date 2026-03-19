@@ -24,4 +24,65 @@ public class PropertyFileReader {
         }
         return ip;
     }
+    public static int getClientPort() {
+        Properties prop = new Properties();
+        String port = "";
+        try (InputStream input = PropertyFileReader.class.getClassLoader().getResourceAsStream("config.properties")) {
+            if (input == null) {
+                System.out.println("Sorry, unable to find config.properties");
+                return Integer.parseInt(port);
+            }
+
+            prop.load(input);
+            port = prop.getProperty("client.port");
+
+            if (port != null) {
+                port = port.trim();
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+        return Integer.parseInt(port);
+    }
+        public static int getServiceNodeUDPPort() {
+        Properties prop = new Properties();
+        String port = "";
+        try (InputStream input = PropertyFileReader.class.getClassLoader().getResourceAsStream("config.properties")) {
+            if (input == null) {
+                System.out.println("Sorry, unable to find config.properties");
+                return Integer.parseInt(port);
+            }
+
+            prop.load(input);
+            port = prop.getProperty("serviceNodeUDP.port");
+
+            if (port != null) {
+                port = port.trim();
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+        return Integer.parseInt(port);
+    }
+            public static int getServiceNodeTCPPort() {
+        Properties prop = new Properties();
+        String port = "";
+        try (InputStream input = PropertyFileReader.class.getClassLoader().getResourceAsStream("config.properties")) {
+            if (input == null) {
+                System.out.println("Sorry, unable to find config.properties");
+                return Integer.parseInt(port);
+            }
+
+            prop.load(input);
+            port = prop.getProperty("serviceNodeTCP.port");
+
+            if (port != null) {
+                port = port.trim();
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+        return Integer.parseInt(port);
+    }
+    
 }

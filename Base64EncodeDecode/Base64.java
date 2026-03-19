@@ -20,13 +20,9 @@ public class Base64{
     private DataInputStream dataInputStream;
     final static String base64Text = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     private static final int[] DECODE_TABLE = new int[256];
-<<<<<<< HEAD
     private static final String SERVER_HOST = PropertyFileReader.getIP();
-=======
-    private static final String SERVER_HOST = "10.111.134.253";
->>>>>>> cb3e732407444af5a6a2b806b1e2d649bf56b8e8
-    private static final int SERVER_PORT_TCP = 1234;
-    private static final int SERVER_PORT_UDP = 1235;
+    private static final int SERVER_PORT_TCP = PropertyFileReader.getServiceNodeTCPPort();
+    private static final int SERVER_PORT_UDP = PropertyFileReader.getServiceNodeUDPPort();
 
     static {
         // Default all to invalid

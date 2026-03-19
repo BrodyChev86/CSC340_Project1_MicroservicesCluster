@@ -3,6 +3,34 @@
   "configurations": [
     {
       "type": "java",
+      "name": "CSV_Reader",
+      "request": "launch",
+      "mainClass": "CSV_Stats.CSV_Reader",
+      "projectName": "CSC340_Project1_MicroservicesCluster-1_3f23840b"
+    },
+    {
+      "type": "java",
+      "name": "Client",
+      "request": "launch",
+      "mainClass": "ServerClientTools.Client",
+      "projectName": "CSC340_Project1_MicroservicesCluster-1_3f23840b"
+    },
+    {
+      "type": "java",
+      "name": "ImageTransformer",
+      "request": "launch",
+      "mainClass": "ImageTransformer",
+      "projectName": "CSC340_Project1_MicroservicesCluster-1_3f23840b"
+    },
+    {
+      "type": "java",
+      "name": "Base64",
+      "request": "launch",
+      "mainClass": "Base64EncodeDecode.Base64",
+      "projectName": "CSC340_Project1_MicroservicesCluster-1_3f23840b"
+    },
+    {
+      "type": "java",
       "name": "EntropyNode",
       "request": "launch",
       "mainClass": "FileEntropyAnalyzer.EntropyNode",

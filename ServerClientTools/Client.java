@@ -17,6 +17,7 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.border.EmptyBorder;
+
 //Code created with the help of a tutorial on YouTube by WittCode (https://youtu.be/gLfuZrrfKes?si=r0TVgY7UQkRsKLtl) and modified by BrodyChev86 to fit the requirements of the project
 
 public class Client {
@@ -32,6 +33,8 @@ public class Client {
     private int expectedChunks = 0;
     private int receivedChunks = 0;
     private java.util.List<File> filesToSend = new java.util.ArrayList<>();
+    private static final String SERVER_HOST = PropertyFileReader.getIP();
+    private static final int SERVER_PORT_TCP = 1234;
 
     public Client(Socket socket, String username) {
         try {
@@ -246,12 +249,14 @@ public class Client {
     public static void main(String[] args) throws IOException {
         Scanner scanner = new Scanner(System.in);
         String username = UUID.randomUUID().toString();
-        System.out.print("Please input the server you would like to connect to like the following:\n" +"ServerIPv4,TCPport#\n");
+        //System.out.print("Please input the server you would like to connect to like the following:\n" +"ServerIPv4,TCPport#\n");
 
-        String serverInputs = scanner.nextLine();
-        String[] splitServerInputs = serverInputs.split(",");
-        String serverIp = splitServerInputs[0];
-        int portNum = Integer.parseInt(splitServerInputs[1]);
+        //String serverInputs = scanner.nextLine();
+        //String[] splitServerInputs = serverInputs.split(",");
+        //String serverIp = splitServerInputs[0];
+        //int portNum = Integer.parseInt(splitServerInputs[1]);
+        String serverIp = PropertyFileReader.getIP();
+        int portNum = PropertyFileReader.getClientPort();
 
         Socket socket = new Socket(serverIp, portNum); // Creates a socket that connects to the server running on
                                                        // localhost at port 1234, allowing the client to communicate

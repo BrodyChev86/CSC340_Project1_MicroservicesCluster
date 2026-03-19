@@ -9,6 +9,8 @@ import java.net.Socket;
 import java.util.Timer;
 import java.util.TimerTask;
 
+import ServerClientTools.PropertyFileReader;
+
 public class Base64{
 
     private byte[] outgoingData = new byte[1024];
@@ -18,9 +20,9 @@ public class Base64{
     private DataInputStream dataInputStream;
     final static String base64Text = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     private static final int[] DECODE_TABLE = new int[256];
-    private static final String SERVER_HOST = "10.111.134.253";
-    private static final int SERVER_PORT_TCP = 1234;
-    private static final int SERVER_PORT_UDP = 1235;
+    private static final String SERVER_HOST = PropertyFileReader.getIP();
+    private static final int SERVER_PORT_TCP = PropertyFileReader.getServiceNodeTCPPort();
+    private static final int SERVER_PORT_UDP = PropertyFileReader.getServiceNodeUDPPort();
 
     static {
         // Default all to invalid

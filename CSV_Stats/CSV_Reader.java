@@ -114,7 +114,7 @@ public class CSV_Reader {
     private static String handleRequest(String request) {
         try {
             // Split payload into parts (CSV|filename|base64data)
-            String[] parts = request.split("\\|");
+            String[] parts = request.split("\\|",3);
 
             // ensure filename looks like a CSV
             String filename = parts.length > 1 ? parts[1] : "";

@@ -3,20 +3,6 @@
   "configurations": [
     {
       "type": "java",
-      "name": "Client",
-      "request": "launch",
-      "mainClass": "ServerClientTools.Client",
-      "projectName": "CSC340_Project1_MicroservicesCluster_d8036be2"
-    },
-    {
-      "type": "java",
-      "name": "CSV_Reader",
-      "request": "launch",
-      "mainClass": "CSV_Stats.CSV_Reader",
-      "projectName": "CSC340_Project1_MicroservicesCluster_d8036be2"
-    },
-    {
-      "type": "java",
       "name": "EntropyNode",
       "request": "launch",
       "mainClass": "FileEntropyAnalyzer.EntropyNode",

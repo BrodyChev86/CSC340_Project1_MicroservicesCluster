@@ -484,6 +484,10 @@ public class ClientHandler implements Runnable {
             broadcastMessageToSender(nodeErrorMessage(response));
             return;
         }
+        if (response.startsWith("[ERROR]")) {
+            broadcastMessageToSender(response);
+            return;
+        }
         byte[] fileBytes = java.util.Base64.getDecoder().decode(response);
 
         String baseName = currentFile.getFileName();

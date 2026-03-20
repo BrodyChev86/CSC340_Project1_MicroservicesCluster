@@ -30,7 +30,7 @@ public class TOPK {
         "The coffee bean comes from the Java region and is very famous worldwide."
     );
     // Config
-    private static final String SERVER_HOST = "10.111.134.253";
+    private static final String SERVER_HOST = PropertyFileReader.getIP();
     private static final int SERVER_PORT_TCP = PropertyFileReader.getServiceNodeTCPPort();
     private static final int SERVER_PORT_UDP = PropertyFileReader.getServiceNodeUDPPort();
     private static final String SERVICE_NAME = "TOPK";

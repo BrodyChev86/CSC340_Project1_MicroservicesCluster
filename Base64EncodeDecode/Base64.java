@@ -152,9 +152,23 @@ public class Base64{
 
     public void sendEncodedText(byte[] data) {
         try {
-            String messageToSend = encode(data);
-            dataOutputStream.writeUTF(messageToSend);
-            dataOutputStream.flush();
+            String encoded = encode(data);
+            int chunkSize = 20000;
+            int totalChunks = (encoded.length() + chunkSize - 1) / chunkSize;
+
+            if (totalChunks == 1) {
+                dataOutputStream.writeUTF(encoded);
+                dataOutputStream.flush();
+            } else {
+                dataOutputStream.writeUTF("FILE_RESPONSE_START|" + totalChunks);
+                dataOutputStream.flush();
+                for (int i = 0; i < totalChunks; i++) {
+                    int start = i * chunkSize;
+                    int end = Math.min(start + chunkSize, encoded.length());
+                    dataOutputStream.writeUTF("FILE_RESPONSE_CHUNK|" + encoded.substring(start, end));
+                    dataOutputStream.flush();
+                }
+            }
         } catch (IOException e) {
             closeEverything(socket, dataInputStream, dataOutputStream);
         }

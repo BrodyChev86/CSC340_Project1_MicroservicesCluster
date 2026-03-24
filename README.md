@@ -53,7 +53,7 @@ Use a terminal for each component you wish to run.  All commands assume you are 
 4. **Upload files and issue commands** using the client.  See the “Client Commands” section below for valid syntax.
 
 ### Configuration – Localhost and Ports
-All network connections default to `localhost` (127.0.0.1) and ports 1234 (TCP) / 1235 (UDP).  To run components across machines, edit the hard‑coded `SERVER_HOST`, `SERVER_PORT_TCP`, and `SERVER_PORT_UDP` constants in the Java files listed below, then recompile:
+All network connections default to `localhost` (127.0.0.1) and ports 1234 (TCP) / 1235 (UDP).  To run components across machines, edit the  `config.properties` file to change the IP and Port #'s for the services listed below, then recompile:
 
 - `ServerClientTools/Client.java`
 - `ServerClientTools/Server.java`
